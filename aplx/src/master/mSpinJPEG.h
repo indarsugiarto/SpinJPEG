@@ -1,8 +1,9 @@
-#ifndef SPINJPEG_H
-#define SPINJPEG_H
+#ifndef MSPINJPEG_H
+#define MSPINJPEG_H
 
 #include <stdbool.h> 		//introduced in C99 with true equal 1, and false equal 0
 #include "spin1_api.h"
+#include "../SpinJPEG.h"
 
 /********************** CONST/MACRO definitions ***********************/
 
@@ -17,21 +18,30 @@
 /*----------- DMA functionality -----------*/
 #define DMA_IMG_BUF_WRITE	1
 
+/*----------- Debugging functionality -----------*/
+#define DEBUG_MODE	1
 
 /********************** VARIABLES definitions ***********************/
 /*--- Generic variables ---*/
 uint coreID;
 
-static bool sdramImgBufInitialized;
-static void *sdramImgBuf;
-static void *sdramImgBufPtr;
-static uint sdramImgBufSize;
+bool sdramImgBufInitialized;
+uchar *sdramImgBuf;
+uchar *sdramImgBufPtr;
+uint sdramImgBufSize;
+
+/*--- Debugging variables ---*/
+uint nReceivedChunk;
+uint szImgFile;
+static uint dmaAllocErrCntr = 0;
+
 
 /********************** FUNCTION prototypes ***********************/
 /*--- Main/helper functions ----*/
-extern void app_init ();
-extern void resizeImgBuf(uint szFile, uint null);
+void app_init ();
+void resizeImgBuf(uint szFile, uint null);
 
 /*--- Event Handlers ---*/
-extern void hSDP (uint mBox, uint port);
+void hSDP (uint mBox, uint port);
+void hDMA (uint tid, uint tag);
 #endif

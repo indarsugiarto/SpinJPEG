@@ -7,10 +7,14 @@ import time
 import os
 
 #-------- SpiNNaker-related parameters --------
-SDP_RECV_PORT = 1
-SDP_RECV_CORE = 1
+SDP_RECV_DATA_PORT = 1
+SDP_RECV_CMD_PORT = 2
+SDP_RECV_CORE = 2
+SDP_CMD_INIT_SIZE = 1
 SPINN_HOST = '192.168.240.253'
 SPINN_PORT = 17893
+DELAY_IS_ON = True
+DELAY_SEC = 0.1 #useful for debugging
 
 class imgWidget(QtGui.QWidget):
     def __init__(self, Title, parent=None):
@@ -73,6 +77,7 @@ class cViewerDlg(QtGui.QWidget):
                 pixmap.convertFromImage(self.orgImg)
                 self.orgImgViewer = imgWidget("Original Image")
                 self.orgImgViewer.setPixmap(pixmap)
+                self.szImgFile = os.path.getsize(self.fName)
                 return True
             else:
                 print "[FAIL] Cannot load image file!"
@@ -84,7 +89,17 @@ class cViewerDlg(QtGui.QWidget):
               mac_hdr(14) + ip_hdr(20) + udp_hdr(8) + sdp + fcs(4)
               hence, udp_payload = 14+20+8+4 = 46 byte
         """
-        print "[INFO] Sending image to SpiNNaker...",
+        print "[INFO] Sending image info to SpiNNaker...",
+        self.sendImgInfo()
+        print "done!"
+
+        """
+        ######################### IMPORTANT !!! ############################
+        TODO: if spinjpeg needs to re-create sdram buffer (because the new image
+              is bigger), then we need to introduce another delay here
+        """
+
+        print "[INFO] Sending image data to SpiNNaker...",
         cntr = 0
         szData = 0
         tic_is_set = False
@@ -92,14 +107,14 @@ class cViewerDlg(QtGui.QWidget):
             chunk = f.read(272) #272 = 256(data) + 16(SCP)
             while chunk != "":
                 ba = bytearray(chunk)
-                lba = len(ba)
+                lba = len(ba) #should be SCP+data only, which is 272 max
                 if lba > 0:
                     if tic_is_set is False:
                         tic = time.time()
                         tic_is_set = True
                     self.sendChunk(ba)
                     cntr += 1
-                    szData += (lba + 46) #consider udp_payload
+                    szData += (lba + 46 + 8) #consider udp_payload and sdp_hdr
                 chunk = f.read(272)
             self.sendChunk(None) # end of image transmission
             toc = time.time()
@@ -108,15 +123,27 @@ class cViewerDlg(QtGui.QWidget):
         #calculate bandwidth usage
         elapse_sec = toc - tic
         bw_KB = (szData/1024) / elapse_sec
-        print "[INFO] Image file size =", os.path.getsize(self.fName)/1024, "KB"
+        print "[INFO] Image file size =", self.szImgFile, "Byte = ", self.szImgFile/1024, "KB"
         print "[INFO] Total size of UDP packets =", szData/1024, "KB"
         print "[INFO] Elapsed time in sec = ", elapse_sec
         print "[INFO] Total (max) bandwidth usage = {} KBps".format(bw_KB)
 
+    def sendImgInfo(self):
+        dpc = (SDP_RECV_CMD_PORT << 5) + SDP_RECV_CORE #destination port and core
+        pad = struct.pack('2B',0,0)
+        hdr = struct.pack('4B2H',7,0,dpc,255,0,0)
+        scp = struct.pack('2H3I',SDP_CMD_INIT_SIZE,0,self.szImgFile,0,0)
+        sdp = pad + hdr + scp
+        CmdSock = QtNetwork.QUdpSocket()
+        CmdSock.writeDatagram(sdp, QtNetwork.QHostAddress(self.spinn), SPINN_PORT)
+        CmdSock.flush()
+        # then give a break, otherwise spinnaker will collapse
+        self.delay()
+
     def sendChunk(self, chunk):
         # based on sendSDP()
         # will be sent to chip <0,0>, no SCP
-        dpc = (SDP_RECV_PORT << 5) + SDP_RECV_CORE #destination port and core
+        dpc = (SDP_RECV_DATA_PORT << 5) + SDP_RECV_CORE #destination port and core
         pad = struct.pack('2B',0,0)
         hdr = struct.pack('4B2H',7,0,dpc,255,0,0)
         if chunk is not None:
@@ -127,7 +154,12 @@ class cViewerDlg(QtGui.QWidget):
         CmdSock = QtNetwork.QUdpSocket()
         CmdSock.writeDatagram(sdp, QtNetwork.QHostAddress(self.spinn), SPINN_PORT)
         CmdSock.flush()
+        # then give a break, otherwise spinnaker will collapse
+        self.delay()
 
+    def delay(self):
+        if DELAY_IS_ON:
+            time.sleep(DELAY_SEC)
 #---------------------------- end of class cViewerDlg -----------------------------------
 
 

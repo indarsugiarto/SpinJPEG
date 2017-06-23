@@ -1,3 +1,9 @@
+/* spinjpeg.c is the main part that works as a master
+ * In this file, the main decoder loop is implemented.
+ * It will broadcast messages to workers when an intense computation is
+ * found.
+ *
+ * */
 #include "spinjpeg.h"
 
 /*--------------------------- MAIN FUNCTION -----------------------------*/
@@ -5,15 +11,11 @@
 void c_main()
 {
     app_init();
-  // set timer tick value (in microseconds)
-  //spin1_set_timer_tick (TIMER_TICK_PERIOD);
 
-  // register callbacks
   //spin1_callback_on (MCPL_PACKET_RECEIVED, count_packets, -1);
-  //spin1_callback_on (DMA_TRANSFER_DONE, check_memcopy, 0);
-  //spin1_callback_on (TIMER_TICK, flip_led, 3);
+    spin1_callback_on (DMA_TRANSFER_DONE, hDMA, 0);
 
-  // go
+	// then go in the event-loop
     spin1_start (SYNC_NOWAIT);
 }
 /*-----------------------------------------------------------------------*/
@@ -60,6 +62,10 @@ void resizeImgBuf(uint szFile, uint null)
            // reset the image buffer pointer to the starting position
            sdramImgBufPtr = sdramImgBuf;
            createNew = false;
+#if(DEBUG_MODE > 0)
+           io_printf(IO_STD, "No need to create a new sdram buffer\n");
+           io_printf(IO_STD, "sdramImgBufPtr is reset to 0x%x\n", sdramImgBufPtr);
+#endif
         }
     } else {
         createNew = true;
@@ -84,10 +90,18 @@ void resizeImgBuf(uint szFile, uint null)
                   tag is set to 0, to make sure it is always allocated (using AppID) 
         */
         sdramImgBufSize = roundUp(szFile);
+
+#if(DEBUG_MODE > 0)
+        io_printf(IO_STD, "Allocating %d-bytes of sdram buffer\n", sdramImgBufSize);
+#endif
+
         sdramImgBuf = sark_xalloc (sv->sdram_heap, szFile, 0, ALLOC_LOCK);
         if(sdramImgBuf != NULL) {
             sdramImgBufInitialized = true;
             sdramImgBufPtr = sdramImgBuf;
+#if(DEBUG_MODE > 0)
+            io_printf(IO_BUF, "Sdram buffer is allocated at 0x%x with ptr 0x%x\n", sdramImgBuf, sdramImgBufPtr);
+#endif
         } else {
             io_printf(IO_BUF, "[ERR] Fail to create sdramImgBuf!\n");
             // dangerous: terminate then!
