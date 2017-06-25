@@ -180,3 +180,44 @@ int load_huff_tables(uchar *fi)
   }	/* loop on tables */
   return 0;
 }
+
+/*-----------------------------------*/
+/* extract a single symbol from file */
+/* using specified huffman table ... */
+/*-----------------------------------*/
+
+uchar get_symbol(uchar *fi, int select)
+{
+  int cellPt;
+
+  cellPt = 0; /* this is the root cell */
+
+  while (HUFF_FLAG(HTable[select][cellPt]) == GOOD_NODE_FLAG)
+    cellPt = get_one_bit(fi) | (HUFF_VALUE(HTable[select][cellPt])<<1);
+
+  switch (HUFF_FLAG(HTable[select][cellPt])) {
+  case SPECIAL_FLAG:
+#if(DEBUG_MODE>0)
+    io_printf(IO_BUF, "[ERROR] Found forbidden Huffman symbol at-%d!\n", nCharRead);
+#endif
+    aborted_stream(ON_ELSE);
+    break;
+
+  case GOOD_LEAF_FLAG:
+    return HUFF_VALUE(HTable[select][cellPt]);
+    break;
+
+  case BAD_LEAF_FLAG:
+    /* how do we fall back in case of truncated tree ? */
+    /* suggest we send an EOB and warn */
+#if(DEBUG_MODE>0)
+    io_printf(IO_BUF, "[tWARNING] Falling out of truncated tree !\n");
+#endif
+    return 0;
+    break;
+
+  default:
+    break;
+  }
+  return 0;
+}

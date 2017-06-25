@@ -14,15 +14,13 @@ void hSDP (uint mBox, uint port)
     //io_printf(IO_STD, "Got msg port-%d with length=%d\n", port, msg->length);
 #endif
 
+    /*--------------------- JPEG File version -----------------------*/
     if (port == SDP_PORT_JPEG_CMD) {
         if (msg->cmd_rc == SDP_CMD_INIT_SIZE) {
             //resizeImgBuf(msg->arg1, NULL);
             szImgFile = msg->arg1;
             nReceivedChunk = 0;
-            spin1_schedule_callback(resizeImgBuf, szImgFile, 0, 1);
-#if(DEBUG_MODE>0)
-            io_printf(IO_STD, "Sdram buffer is allocated at 0x%x with ptr 0x%x\n", sdramImgBuf, sdramImgBufPtr);
-#endif
+            spin1_schedule_callback(resizeImgBuf, szImgFile, SDP_PORT_JPEG_CMD, 1);
         }
     }
     else if (port == SDP_PORT_JPEG_DATA) {
@@ -30,7 +28,7 @@ void hSDP (uint mBox, uint port)
         uint len = msg->length - sizeof(sdp_hdr_t);
         // Note: GUI will send "header only" to signify end of image data
         if(len > 0) {
-            uint tid = spin1_dma_transfer(DMA_IMG_BUF_WRITE, sdramImgBufPtr, 
+            uint tid = spin1_dma_transfer(DMA_JPG_IMG_BUF_WRITE, sdramImgBufPtr,
                                (void *)&msg->cmd_rc, DMA_WRITE, len);
 
 #if(DEBUG_MODE>=0)
@@ -52,6 +50,45 @@ void hSDP (uint mBox, uint port)
 #if(DEBUG_MODE>0)
             io_printf(IO_STD, "[INFO] Received %d chunks\n", nReceivedChunk);
 #endif
+            // TODO: reset?
+        }
+    }
+
+    /*--------------------- JPEG File version -----------------------*/
+    else if (port == SDP_PORT_RAW_CMD) {
+        if (msg->cmd_rc == SDP_CMD_INIT_SIZE) {
+            szImgFile = msg->arg1;
+            nReceivedChunk = 0;
+            spin1_schedule_callback(resizeImgBuf, szImgFile, SDP_PORT_RAW_CMD, 1);
+        }
+    }
+    else if (port == SDP_PORT_RAW_DATA) {
+        // assuming msg->length contains correct value ???
+        uint len = msg->length - sizeof(sdp_hdr_t);
+        // Note: GUI will send "header only" to signify end of image data
+        if(len > 0) {
+            uint tid = spin1_dma_transfer(DMA_RAW_IMG_BUF_WRITE, sdramImgBufPtr,
+                               (void *)&msg->cmd_rc, DMA_WRITE, len);
+
+#if(DEBUG_MODE>=0)
+            if(tid == 0) dmaAllocErrCntr++;
+#endif
+
+            sdramImgBufPtr += len;
+            nReceivedChunk++;
+#if(DEBUG_MODE>0)
+            io_printf(IO_BUF, "sdramImgBufPtr is at 0x%x\n", sdramImgBufPtr);
+#endif
+        }
+        // end of image data detected
+        else {
+            io_printf(IO_STD, "[INFO] End-of-data is detected!\n");
+            io_printf(IO_STD, "[INFO] %d-chunks for %d-byte data are collected!\n",nReceivedChunk,szImgFile);
+            io_printf(IO_STD, "[INFO] dmaAllocErrCntr = %d\n", dmaAllocErrCntr);
+#if(DEBUG_MODE>0)
+            io_printf(IO_STD, "[INFO] Received %d chunks\n", nReceivedChunk);
+#endif
+            // TODO: reset?
         }
     }
 
@@ -68,7 +105,7 @@ void hDMA (uint tid, uint tag)
             //io_printf(IO_STD, "[INFO] DMA with tid-%d is done\n", tid);
 #endif
     /* when the first chunk of jpeg file is received, trigger the main decoder */
-    if(tag == DMA_IMG_BUF_WRITE && nReceivedChunk == 0) {
+    if(tag == DMA_JPG_IMG_BUF_WRITE && nReceivedChunk == 0) {
         spin1_trigger_user_event(UE_START_DECODER, NULL);
     }
 }

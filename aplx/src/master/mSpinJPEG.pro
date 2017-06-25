@@ -8,7 +8,10 @@ SOURCES += \
     eHandlers.c \ 
     parse.c \
     utils.c \
-    tree_vld.c
+    tree_vld.c \
+    huffman.c \
+    idct.c \
+    rle.c
 
 INCLUDEPATH += /opt/spinnaker_tools_3.1.0/include \
     ../

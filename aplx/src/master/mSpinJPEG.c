@@ -39,11 +39,11 @@ void c_main()
  */
 
 /*--- Function prototypes ---*/
-void get_SOF();
-void get_DHT();
-void get_DQT();
-void get_DRI(int *ri);
-void get_SOS(int ri);
+void get_SOF(uchar *fi);
+void get_DHT(uchar *fi);
+void get_DQT(uchar *fi);
+void get_DRI(uchar *fi, int *ri);
+void get_SOS(uchar *fi, int ri);
 void get_EOI();
 void decode(uint arg0, uint arg1)
 {
@@ -71,20 +71,20 @@ void decode(uint arg0, uint arg1)
         mark = get_next_MK(fi);
         switch (mark) {
         case SOF_MK: /* start of frame marker */
-            get_SOF(); break;
+            get_SOF(fi); break;
         case DHT_MK: /* Define Huffman Table */
-            get_DHT(); break;
+            get_DHT(fi); break;
         case DQT_MK: /* Define Quantization Table */
-            get_DQT(); break;
+            get_DQT(fi); break;
         case DRI_MK: /* Define Restart Interval */
-            get_DRI(&restart_interval); break;
+            get_DRI(fi, &restart_interval); break;
         case SOS_MK:
-            get_SOS(restart_interval); break;
+            get_SOS(fi, restart_interval); break;
         case EOI_MK:
             get_EOI(); break;
         case COM_MK:
 #if(DEBUG_MODE>0)
-            fprintf(stderr, "[INFO] Skipping comments\n");
+            io_printf(IO_BUF, "[INFO] Skipping comments\n");
 #endif
             skip_segment(fi); break;
         case EOF:
@@ -117,9 +117,9 @@ void decode(uint arg0, uint arg1)
 
 
 /*--- Function implementation ---*/
-void get_SOF()
+void get_SOF(uchar *fi)
 {
-    uint aux;
+    uint aux, i;
 #if(DEBUG_MODE>0)
     io_printf(IO_BUF, "[INFO] Found the SOF marker at-%d!\n", nCharRead);
 #endif
@@ -128,13 +128,13 @@ void get_SOF()
     fgetc(fi);	/* precision, 8bit, don't care */
     y_size = get_size(fi); x_size = get_size(fi); /* Video frame size ??? */
     n_comp = fgetc(fi);	/* # of components */
-#if(DEBUG_MODE)
-    io_printf(IO_BUFF, "[INFO] Image size is %d by %d\n", x_size, y_size);
+#if(DEBUG_MODE>0)
+    io_printf(IO_BUF, "[INFO] Image size is %d by %d\n", x_size, y_size);
     uchar clrStr[12];
     switch (n_comp){
     case 1: io_printf(clrStr, "Monochrome"); break;
     case 3: io_printf(clrStr, "Color"); break;
-    default: io_printf(clrstr, "Not a"); break;
+    default: io_printf(clrStr, "Not a"); break;
     }
     io_printf(IO_BUF, "[INFO] %s JPEG image!\n", clrStr);
 #endif
@@ -176,16 +176,16 @@ void get_SOF()
     }
 }
 
-void get_DHT()
+void get_DHT(uchar *fi)
 {
-#if(DEBUG_MODE)
+#if(DEBUG_MODE>0)
     io_printf(IO_BUF, "[INFO] Defining Huffman Tables found at-%d\n", nCharRead);
 #endif
     if (load_huff_tables(fi) == -1)
         aborted_stream(ON_ELSE);
 }
 
-void get_DQT()
+void get_DQT(uchar *fi)
 {
 #if(DEBUG_MODE>0)
     io_printf(IO_BUF, "[INFO] Defining Quantization Tables at-%d\n", nCharRead);
@@ -194,19 +194,20 @@ void get_DQT()
         aborted_stream(ON_ELSE);
 }
 
-void get_DRI(int *ri)
+void get_DRI(uchar *fi, int *ri)
 {
     get_size(fi);	/* skip size */
     *ri = get_size(fi);
 #if(DEBUG_MODE>0)
-    io_printf(IO_BUF, "[INFO] Defining Restart Interval %d\n", restart_interval);
+    io_printf(IO_BUF, "[INFO] Defining Restart Interval %d\n", *ri);
 #endif
 }
 
-void get_SOS(int restart_interval)
+void get_SOS(uchar *fi, int restart_interval)
 {
     uint aux;
     int n_restarts, leftover; /* RST check */
+    int i,j;
 
 #if(DEBUG_MODE>0)
     io_printf(IO_BUF, "[INFO] Found the SOS marker at-%d!\n", nCharRead);
@@ -296,6 +297,25 @@ void get_EOI()
 
 
 
+
+
+
+
+
+/*------------------------ RASTER MAIN FUNCTION ---------------------------*/
+/*-------------------------------------------------------------------------*/
+
+
+
+
+
+
+
+
+
+
+
+
 /*--------------------------- HELPER FUNCTION -----------------------------*/
 /*-------------------------------------------------------------------------*/
 
@@ -325,7 +345,7 @@ uint roundUp(uint v)
 /* resizeImgBuf() is called when host-PC trigger an SDP with SDP_CMD_INIT_SIZE
  *
  */
-void resizeImgBuf(uint szFile, uint null)
+void resizeImgBuf(uint szFile, uint portSrc)
 {
     bool createNew;
     if(sdramImgBufInitialized) {
@@ -375,7 +395,7 @@ void resizeImgBuf(uint szFile, uint null)
             sdramImgBufInitialized = true;
             sdramImgBufPtr = sdramImgBuf;
 #if(DEBUG_MODE > 0)
-            io_printf(IO_BUF, "Sdram buffer is allocated at 0x%x with ptr 0x%x\n", sdramImgBuf, sdramImgBufPtr);
+            io_printf(IO_STD, "Sdram buffer is allocated at 0x%x with ptr 0x%x\n", sdramImgBuf, sdramImgBufPtr);
 #endif
         } else {
             io_printf(IO_BUF, "[ERR] Fail to create sdramImgBuf!\n");

@@ -9,14 +9,21 @@
 
 
 /*----------- SDP functionality -----------*/
+/*--- For JPEG file ---*/
 #define SDP_PORT_JPEG_DATA	1
 #define SDP_PORT_JPEG_CMD	2
+/*--- For Raw RGB file ---*/
+#define SDP_PORT_RAW_DATA   3
+#define SDP_PORT_RAW_CMD    4
+/*--- For both ---*/
 #define SDP_CMD_INIT_SIZE	1
+
 
 #define SDP_RECV_CORE_ID	2
 
 /*----------- DMA functionality -----------*/
-#define DMA_IMG_BUF_WRITE	1
+#define DMA_JPG_IMG_BUF_WRITE	1
+#define DMA_RAW_IMG_BUF_WRITE   2
 
 /*----------- Pre-defined user events -----------*/
 #define UE_START_DECODER    1
@@ -98,7 +105,7 @@ typedef enum cond_e
 
 void decode(uint arg0, uint arg1);          // decoder main loop
 void app_init ();
-void resizeImgBuf(uint szFile, uint null);
+void resizeImgBuf(uint szFile, uint portSrc); // portSrc can be used to distinguish, if it is for JPEG data or Raw data
 void aborted_stream(cond_t condition);
 void free_structures();
 
@@ -114,8 +121,12 @@ void hUEvent(uint eventID, uint arg);
 uint get_next_MK(uchar *fi);
 uint get_size(uchar *fi);
 int init_MCU(void);
+int process_MCU(uchar *fi);
 int	load_quant_tables(uchar *fi);
 void skip_segment(uchar *fi);
+void clear_bits();
+uchar get_one_bit(uchar *fi);
+unsigned long get_bits(uchar *fi, int number);
 
 
 /*-----------------------------------------*/
@@ -130,13 +141,27 @@ int fgetc(uchar *stream);
 int ceil_div(int N, int D);
 int floor_div(int N, int D);
 void reset_prediction();
-
+int reformat(unsigned long S, int good);
+void color_conversion(void);
 
 /*-------------------------------------------*/
 /* prototypes from table_vld.c or tree_vld.c */
 /*-------------------------------------------*/
 
 int	load_huff_tables(uchar *fi);
+uchar get_symbol(uchar *fi, int select);
+
+/*-----------------------------------------*/
+/* prototypes from huffman.c 		   */
+/*-----------------------------------------*/
+/* unpack, predict, dequantize, reorder on store */
+void unpack_block(uchar *fi, FBlock *T, int comp);
+
+/*-------------------------------------------*/
+/* prototypes from idct.c                    */
+/*-------------------------------------------*/
+
+void	IDCT(const FBlock *S, PBlock *T);
 
 
 #endif

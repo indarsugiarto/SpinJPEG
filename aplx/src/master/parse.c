@@ -1,8 +1,64 @@
+/*-----------------------------------------*/
+/* Based on parse.c by Pierre Guerrier     */
+/*-----------------------------------------*/
+
 #include "mSpinJPEG.h"
 /*----------------------------------------------------------------*/
 /* find next marker of any type, returns it, positions just after */
 /* EOF instead of marker if end of file met while searching ...	  */
 /*----------------------------------------------------------------*/
+
+static unsigned char bit_count;	/* available bits in the window */
+static unsigned char window;
+
+unsigned long get_bits(uchar *fi, int number)
+{
+  int i, newbit;
+  unsigned long result = 0;
+  unsigned char aux, wwindow;
+
+  if (!number)
+    return 0;
+
+  for (i = 0; i < number; i++) {
+    if (bit_count == 0) {
+      wwindow = fgetc(fi);
+
+      if (wwindow == 0xFF)
+        switch (aux = fgetc(fi)) {	/* skip stuffer 0 byte */
+            case EOF:
+            case 0xFF:
+#if(DEBUG_MODE>0)
+                io_printf(IO_BUF, "[ERROR] Ran out of bit stream\n");
+#endif
+                aborted_stream(ON_ELSE);
+                break;
+
+            case 0x00:
+                stuffers++;
+                break;
+
+            default:
+#if(DEBUG_MODE>0)
+                if (RST_MK(0xFF00 | aux))
+                    io_printf(IO_BUF, "[ERROR] Spontaneously found restart at %d!\n", nCharRead);
+                io_printf(IO_BUF, "[ERROR] Lost sync in bit stream\n");
+#endif
+                aborted_stream(ON_ELSE);
+                break;
+        }
+
+      bit_count = 8;
+    }
+    else wwindow = window;
+    newbit = (wwindow>>7) & 1;
+    window = wwindow << 1;
+    bit_count--;
+    result = (result << 1) | newbit;
+  }
+  return result;
+}
+
 
 uint get_next_MK(uchar *fi)
 {
@@ -166,4 +222,112 @@ void skip_segment(uchar *fi)	/* skip a segment we don't want */
   streamPtr += size;
   nCharRead += size;
 
+}
+
+void clear_bits(void)
+{
+  bit_count = 0;
+}
+
+
+/*----------------------------------------------------------*/
+/* this takes care for processing all the blocks in one MCU */
+/*----------------------------------------------------------*/
+
+int process_MCU(uchar *fi)
+{
+  int  i;
+  long offset;
+  int  goodrows, goodcolumns;
+
+  if (MCU_column == mx_size) {
+    MCU_column = 0;
+    MCU_row++;
+    if (MCU_row == my_size) {
+      in_frame = 0;
+      return 0;
+    }
+#if(DEBUG_MODE>0)
+    io_printf(IO_BUF, "[INFO] Processing stripe %d/%d\n", MCU_row+1, my_size);
+#endif
+  }
+
+  for (curcomp = 0; MCU_valid[curcomp] != -1; curcomp++) {
+    unpack_block(fi, FBuff, MCU_valid[curcomp]); /* pass index to HT,QT,pred */
+    IDCT(FBuff, MCU_buff[curcomp]);
+  }
+
+  /* YCrCb to RGB color space transform here */
+  if (n_comp > 1)
+    color_conversion();
+  else
+    //memmove(ColorBuffer, MCU_buff[0], 64);
+    sark_mem_cpy(ColorBuffer, MCU_buff[0], 64);
+
+  /* cut last row/column as needed */
+  if ((y_size != ry_size) && (MCU_row == (my_size - 1)))
+    goodrows = y_size - ry_size;
+  else
+    goodrows = MCU_sy;
+
+  if ((x_size != rx_size) && (MCU_column == (mx_size - 1)))
+    goodcolumns = x_size - rx_size;
+  else
+    goodcolumns = MCU_sx;
+
+  offset = n_comp * (MCU_row * MCU_sy * x_size + MCU_column * MCU_sx);
+
+  for (i = 0; i < goodrows; i++)
+    /*
+    memmove(FrameBuffer + offset + n_comp * i * x_size,
+        ColorBuffer + n_comp * i * MCU_sx,
+        n_comp * goodcolumns);
+    */
+    sark_mem_cpy(FrameBuffer + offset + n_comp * i * x_size,
+                 ColorBuffer + n_comp * i * MCU_sx, n_comp * goodcolumns);
+  MCU_column++;
+  return 1;
+}
+
+uchar get_one_bit(uchar *fi)
+{
+  int newbit;
+  unsigned char aux, wwindow;
+
+  if (bit_count == 0) {
+    wwindow = fgetc(fi);
+
+    if (wwindow == 0xFF)
+      switch (aux = fgetc(fi)) {	/* skip stuffer 0 byte */
+      case EOF:
+      case 0xFF:
+#if(DEBUG_MODE>0)
+        io_printf(IO_BUF, "[ERROR] Ran out of bit stream\n");
+#endif
+        aborted_stream(ON_ELSE);
+        break;
+
+      case 0x00:
+        stuffers++;
+        break;
+
+      default:
+#if(DEBUG_MODE>0)
+        if (RST_MK(0xFF00 | aux))
+            io_printf(IO_BUF, "[ERROR] Spontaneously found restart!\n");
+        io_printf(IO_BUF, "[ERROR] Lost sync in bit stream\n");
+#endif
+        aborted_stream(ON_ELSE);
+        break;
+      }
+
+    bit_count = 8;
+  }
+  else
+    wwindow = window;
+
+  newbit = (wwindow >> 7) & 1;
+  window = wwindow << 1;
+  bit_count--;
+  return newbit;
 }
