@@ -8,3 +8,6 @@ How does it work?
   --> so, let's simplify by deciding that the leader is core-2, and after
       core-2 are workers
 
+in hDMA:
+/* when the first chunk of jpeg file is received, it triggers
+ * the decoder main loop */

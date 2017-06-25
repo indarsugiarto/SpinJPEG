@@ -18,13 +18,57 @@
 /*----------- DMA functionality -----------*/
 #define DMA_IMG_BUF_WRITE	1
 
+/*----------- Pre-defined user events -----------*/
+#define UE_START_DECODER    1
+
 /*----------- Debugging functionality -----------*/
 #define DEBUG_MODE	1
 
+
+
+
+
+
+
 /********************** VARIABLES definitions ***********************/
-/*--- Generic variables ---*/
+
+/*--- global variables here ---*/
+
+cd_t   comp[3]; /* descriptors for 3 components */
+
+PBlock *MCU_buff[10];  /* decoded component buffer */
+                  /* between IDCT and color convert */
+int    MCU_valid[10];  /* components of above MCU blocks */
+
+PBlock *QTable[4];     /* three quantization tables */
+int    QTvalid[4];     /* at most, but seen as four ... */
+
+/*--- picture attributes ---*/
+ int x_size, y_size;	/* Video frame size     */
+int rx_size, ry_size;	/* down-rounded Video frame size */
+                /* in pixel units, multiple of MCU */
+int MCU_sx, MCU_sy;  	/* MCU size in pixels   */
+int mx_size, my_size;	/* picture size in units of MCUs */
+int n_comp;		/* number of components 1,3 */
+
+/*--- processing cursor variables ---*/
+int	in_frame, curcomp;   /* frame started ? current component ? */
+int	MCU_row, MCU_column; /* current position in MCU unit */
+
+/*--- RGB buffer storage ---*/
+unsigned char *ColorBuffer;   /* MCU after color conversion */
+unsigned char *FrameBuffer;   /* complete final RGB image */
+PBlock        *PBuff;           /* scratch pixel buffer */
+FBlock        *FBuff;           /* scratch frequency buffer */
+
+/*--- process statistics ---*/
+int stuffers;	/* number of stuff bytes in file */
+int passed;	/* number of bytes skipped looking for markers */
+
+/*--- Generic, SpiNN-related variables ---*/
 uint coreID;
 
+/*--- JPG file storage ---*/
 bool sdramImgBufInitialized;
 uchar *sdramImgBuf;
 uchar *sdramImgBufPtr;
@@ -36,12 +80,63 @@ uint szImgFile;
 static uint dmaAllocErrCntr = 0;
 
 
+
+
+
+
+
+
+
 /********************** FUNCTION prototypes ***********************/
 /*--- Main/helper functions ----*/
+typedef enum cond_e
+{
+  ON_EXIT,             //!< triggered by exit(1)
+  ON_ELSE,              //!< not by exit(1)
+  ON_FINISH
+} cond_t;
+
+void decode(uint arg0, uint arg1);          // decoder main loop
 void app_init ();
 void resizeImgBuf(uint szFile, uint null);
+void aborted_stream(cond_t condition);
+void free_structures();
 
 /*--- Event Handlers ---*/
 void hSDP (uint mBox, uint port);
 void hDMA (uint tid, uint tag);
+void hUEvent(uint eventID, uint arg);
+
+
+/*-----------------------------------------*/
+/* prototypes from parse.c		   */
+/*-----------------------------------------*/
+uint get_next_MK(uchar *fi);
+uint get_size(uchar *fi);
+int init_MCU(void);
+int	load_quant_tables(uchar *fi);
+void skip_segment(uchar *fi);
+
+
+/*-----------------------------------------*/
+/* prototypes from utils.c		   */
+/*-----------------------------------------*/
+#define EOF -1
+/* imitating std-C fgetc() */
+static int nCharRead = 0;    //!< also related to szImgFile
+uchar *streamPtr;            //!< also related to sdramImgBuf
+int fgetc(uchar *stream);
+/*-------------------------*/
+int ceil_div(int N, int D);
+int floor_div(int N, int D);
+void reset_prediction();
+
+
+/*-------------------------------------------*/
+/* prototypes from table_vld.c or tree_vld.c */
+/*-------------------------------------------*/
+
+int	load_huff_tables(uchar *fi);
+
+
 #endif
