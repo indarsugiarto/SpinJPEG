@@ -1,9 +1,9 @@
-#ifndef MSPINJPEG_H
-#define MSPINJPEG_H
+#ifndef MSPINJPEGDEC_H
+#define MSPINJPEGDEC_H
 
 #include <stdbool.h> 		//introduced in C99 with true equal 1, and false equal 0
 #include "spin1_api.h"
-#include "../SpinJPEG.h"
+#include "../../SpinJPEG.h"
 
 /********************** CONST/MACRO definitions ***********************/
 

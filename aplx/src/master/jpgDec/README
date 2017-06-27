@@ -1,4 +1,4 @@
-=============== This is the master part - mSpinJPEG ================
+=============== This is the master part for decoder - mSpinJPEG ================
 How does it work?
 - spinjpeg needs to know, how big is the buffer in sdram
   --> GUI sends initial info via port-2 the size of file, and wait ack from spinjpeg
@@ -11,3 +11,4 @@ How does it work?
 in hDMA:
 /* when the first chunk of jpeg file is received, it triggers
  * the decoder main loop */
+
