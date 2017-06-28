@@ -2,7 +2,7 @@
 /* Based on parse.c by Pierre Guerrier     */
 /*-----------------------------------------*/
 
-#include "mSpinJPEG.h"
+#include "mSpinJPEGdec.h"
 /*----------------------------------------------------------------*/
 /* find next marker of any type, returns it, positions just after */
 /* EOF instead of marker if end of file met while searching ...	  */

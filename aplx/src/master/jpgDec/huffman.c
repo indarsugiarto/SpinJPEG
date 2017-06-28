@@ -2,7 +2,7 @@
 /* Based on huffman.c by Pierre Guerrier     */
 /*-------------------------------------------*/
 
-#include "mSpinJPEG.h"
+#include "mSpinJPEGdec.h"
 
 
 /*--------------------------------------*/

@@ -2,7 +2,7 @@
 /* Based on tree_vld.c by Pierre Guerrier  */
 /*-----------------------------------------*/
 
-#include "mSpinJPEG.h"
+#include "mSpinJPEGdec.h"
 
 /*--------------------------------------*/
 /* private huffman.c defines and macros */

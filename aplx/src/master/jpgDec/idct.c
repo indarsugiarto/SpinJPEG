@@ -3,7 +3,7 @@
 /* IDCT code by Geert Janssen	     	       */
 /*---------------------------------------------*/
 
-#include "mSpinJPEG.h"
+#include "mSpinJPEGdec.h"
 
 #define Y(i,j)		Y[8*i+j]
 #define X(i,j)		(output->block[i][j])

@@ -1,4 +1,4 @@
-#include "mSpinJPEG.h"
+#include "mSpinJPEGdec.h"
 
 /************************************************************************************/
 /*------------------------------- SDP EVENT ----------------------------------------*/
@@ -54,10 +54,13 @@ void hSDP (uint mBox, uint port)
         }
     }
 
-    /*--------------------- JPEG File version -----------------------*/
+	/*--------------------- Raw File version -----------------------*/
+	/* invoke mSpinJPEGenc to encode it */
     else if (port == SDP_PORT_RAW_CMD) {
         if (msg->cmd_rc == SDP_CMD_INIT_SIZE) {
             szImgFile = msg->arg1;
+			wImg = (ushort)msg->arg2;	// for raw image, this info is explicit from host-PC
+			hImg = (ushort)msg->arg3;
             nReceivedChunk = 0;
             spin1_schedule_callback(resizeImgBuf, szImgFile, SDP_PORT_RAW_CMD, 1);
         }
@@ -88,7 +91,18 @@ void hSDP (uint mBox, uint port)
 #if(DEBUG_MODE>0)
             io_printf(IO_STD, "[INFO] Received %d chunks\n", nReceivedChunk);
 #endif
-            // TODO: reset?
+			// TODO: notify mSpinJPEGenc to start the encoding process
+
+			// tell stub the location of itcm and dtcm
+			uint newRoute = 1 << (ENC_MASTER_CORE+6);			// send to master of encoder
+			uint key = FRPL_NEW_RAW_IMG_INFO_KEY;				// a new raw image is availale
+			uint payload = ((uint)wImg << 16) | hImg;
+			rtr_fr_set(newRoute);								// send to Encoder
+			spin1_send_fr_packet(key, payload, WITH_PAYLOAD);
+			key = FRPL_NEW_RAW_IMG_ADDR_KEY;
+			payload = (uint)sdramImgBuf;
+			spin1_send_fr_packet(key, payload, WITH_PAYLOAD);	// send!
+			io_printf(IO_STD, "[INFO] Encoder is informed with img at 0x%x\n", sdramImgBuf);
         }
     }
 

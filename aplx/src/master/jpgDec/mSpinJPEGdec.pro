@@ -4,7 +4,7 @@ CONFIG -= app_bundle
 CONFIG -= qt
 
 SOURCES += \
-    mSpinJPEG.c \
+    mSpinJPEGdec.c \
     eHandlers.c \ 
     parse.c \
     utils.c \
@@ -14,7 +14,7 @@ SOURCES += \
     rle.c
 
 INCLUDEPATH += /opt/spinnaker_tools_3.1.0/include \
-    ../
+    ../../
 
 DISTFILES += \
     Makefile \
@@ -22,4 +22,4 @@ DISTFILES += \
     compile
 
 HEADERS += \
-    mSpinJPEG.h
+    mSpinJPEGdec.h

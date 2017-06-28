@@ -8,19 +8,6 @@
 /********************** CONST/MACRO definitions ***********************/
 
 
-/*----------- SDP functionality -----------*/
-/*--- For JPEG file ---*/
-#define SDP_PORT_JPEG_DATA	1
-#define SDP_PORT_JPEG_CMD	2
-/*--- For Raw RGB file ---*/
-#define SDP_PORT_RAW_DATA   3
-#define SDP_PORT_RAW_CMD    4
-/*--- For both ---*/
-#define SDP_CMD_INIT_SIZE	1
-
-
-#define SDP_RECV_CORE_ID	2
-
 /*----------- DMA functionality -----------*/
 #define DMA_JPG_IMG_BUF_WRITE	1
 #define DMA_RAW_IMG_BUF_WRITE   2
@@ -84,6 +71,8 @@ uint sdramImgBufSize;
 /*--- Debugging variables ---*/
 uint nReceivedChunk;
 uint szImgFile;
+ushort wImg;	// this info needs to be sent from host when the image data is raw
+ushort hImg;	// this will be passed on to the encoder
 static uint dmaAllocErrCntr = 0;
 
 

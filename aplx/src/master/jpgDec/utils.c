@@ -1,4 +1,4 @@
-#include "mSpinJPEG.h"
+#include "mSpinJPEGdec.h"
 
 /* We emulate the C library function int fgetc(FILE *stream) to get the next character (an unsigned char)
  * from the specified stream and advances the position indicator for the stream.

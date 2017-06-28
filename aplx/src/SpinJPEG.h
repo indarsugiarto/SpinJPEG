@@ -67,4 +67,32 @@ typedef struct {
 } cd_t;
 
 
+/******************** MULTICAST MECHANISM **********************/
+#define FRPL_NEW_RAW_IMG_ADDR_KEY       0x00000002
+#define FRPL_NEW_RAW_IMG_INFO_KEY       0x00000001
+#define FRPL_MASK                       0xFFFFFFFF
+
+
+/*********************** SDP MECHANISM *************************/
+/*--- For JPEG file ---*/
+#define SDP_PORT_JPEG_DATA	1
+#define SDP_PORT_JPEG_CMD	2
+/*--- For Raw RGB file ---*/
+#define SDP_PORT_RAW_DATA   3
+#define SDP_PORT_RAW_CMD    4
+/*--- For both ---*/
+#define SDP_CMD_INIT_SIZE	1
+
+#define SDP_RECV_CORE_ID	2	// this will be the master of mSpinJPEGdec
+#define DEC_MASTER_CORE		SDP_RECV_CORE_ID
+#define ENC_MASTER_CORE		10
+
+#define SDP_SEND_RESULT_TAG     1
+#define SDP_SEND_RESULT_PORT    30000
+#ifndef SDP_HOST_IP             // can be specified during compile time
+#define SDP_HOST_IP		0x02F0A8C0	// This correspond to 192.168.240.2
+#endif
+#define SDP_TX_TIMEOUT          500             // can go save at almost 5Mbps
+//#define SDP_TX_TIMEOUT          10000000      // for debugging
+
 #endif
