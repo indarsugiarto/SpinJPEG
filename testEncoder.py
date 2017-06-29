@@ -39,23 +39,39 @@ class cViewerDlg(QtGui.QWidget):
         self.setupUDP()
 
     def closeEvent(self, event):
-        self.sdpRecv.stop()
         event.accept()
 
     def setupUDP(self):
         self.sdpRecv = QtNetwork.QUdpSocket(self)
-        self.sdpRecv.bind(SDP_SEND_RESULT_PORT)
+        print "[INFO] Trying to open UDP port-{}...".format(SDP_SEND_RESULT_PORT),
+        ok = self.sdpRecv.bind(SDP_SEND_RESULT_PORT)
+        if ok:
+            print "done!"
+        else:
+            print "fail!"
         self.sdpRecv.readyRead.connect(self.readSDP)
 
-	def resetRecvBuf(self):
+    def resetRecvBuf(self):
         self.resultImg = bytearray()
+
+    def saveResult(self):
+        # self.resultImg is a complete jpg image
+        self.fResultName = str(self.fName).replace(".ra1",".jpg")
+        print "[INFO] Writing result to:", self.fResultName
+        with open(self.fResultName, "wb") as bf:
+            bf.write(self.resultImg)
+
 
     @QtCore.pyqtSlot()
     def readSDP(self):
         while self.sdpRecv.hasPendingDatagrams():
             datagram, host, port = self.sdpRecv.readDatagram(self.sdpRecv.pendingDatagramSize())
+        # remove the first 10 bytes of SDP header
+        del datagram[0:10]
+        if len(datagram) > 0:
             self.resultImg.append(datagram)
-        TODO : how to detect EOF? And what to do afterwards?
+        else:
+            self.saveResult()
 
 
     def setupGui(self):

@@ -20,7 +20,7 @@ void hSDP (uint mBox, uint port)
             //resizeImgBuf(msg->arg1, NULL);
             szImgFile = msg->arg1;
             nReceivedChunk = 0;
-            spin1_schedule_callback(resizeImgBuf, szImgFile, SDP_PORT_JPEG_CMD, 1);
+            spin1_schedule_callback(resizeImgBuf, szImgFile, SDP_PORT_JPEG_INFO, 1);
         }
     }
     else if (port == SDP_PORT_JPEG_DATA) {
@@ -62,7 +62,7 @@ void hSDP (uint mBox, uint port)
 			wImg = (ushort)msg->arg2;	// for raw image, this info is explicit from host-PC
 			hImg = (ushort)msg->arg3;
             nReceivedChunk = 0;
-            spin1_schedule_callback(resizeImgBuf, szImgFile, SDP_PORT_RAW_CMD, 1);
+            spin1_schedule_callback(resizeImgBuf, szImgFile, SDP_PORT_RAW_INFO, 1);
         }
     }
     else if (port == SDP_PORT_RAW_DATA) {

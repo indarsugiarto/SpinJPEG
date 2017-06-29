@@ -33,7 +33,7 @@ jpec_enc_t *jpec_enc_new(const uchar *img, ushort w, ushort h, int q)
   return e;
 }
 
-const uchar *jpec_enc_run(jpec_enc_t *e, int *len)
+uchar *jpec_enc_run(jpec_enc_t *e, int *len)
 {
   jpec_enc_open(e);
   while (jpec_enc_next_block(e)) {
@@ -59,7 +59,7 @@ void jpec_enc_del(jpec_enc_t *e)
 
 
 /* Update the internal quantization matrix according to the asked quality */
-static void jpec_enc_init_dqt(jpec_enc_t *e)
+ void jpec_enc_init_dqt(jpec_enc_t *e)
 {
   float qualf = (float) e->qual;
   float scale = (e->qual < 50) ? (50/qualf) : (2 - qualf/50);
@@ -70,7 +70,7 @@ static void jpec_enc_init_dqt(jpec_enc_t *e)
   }
 }
 
-static void jpec_enc_open(jpec_enc_t *e)
+ void jpec_enc_open(jpec_enc_t *e)
 {
   jpec_huff_skel_init(e->hskel);
   jpec_enc_init_dqt(e);
@@ -82,18 +82,18 @@ static void jpec_enc_open(jpec_enc_t *e)
   jpec_enc_write_sos(e);
 }
 
-static void jpec_enc_close(jpec_enc_t *e)
+ void jpec_enc_close(jpec_enc_t *e)
 {
   e->hskel->del(e->hskel->opq);
   jpec_buffer_write_2bytes(e->buf, 0xFFD9); /* EOI marker */
 }
 
-static void jpec_enc_write_soi(jpec_enc_t *e)
+ void jpec_enc_write_soi(jpec_enc_t *e)
 {
   jpec_buffer_write_2bytes(e->buf, 0xFFD8); /* SOI marker */
 }
 
-static void jpec_enc_write_app0(jpec_enc_t *e)
+ void jpec_enc_write_app0(jpec_enc_t *e)
 {
   jpec_buffer_write_2bytes(e->buf, 0xFFE0); /* APP0 marker */
   jpec_buffer_write_2bytes(e->buf, 0x0010); /* segment length */
@@ -110,7 +110,7 @@ static void jpec_enc_write_app0(jpec_enc_t *e)
   jpec_buffer_write_byte(e->buf, 0x00);     /* thumbnail height = 0 */
 }
 
-static void jpec_enc_write_dqt(jpec_enc_t *e)
+ void jpec_enc_write_dqt(jpec_enc_t *e)
 {
   jpec_buffer_write_2bytes(e->buf, 0xFFDB); /* DQT marker */
   jpec_buffer_write_2bytes(e->buf, 0x0043); /* segment length */
@@ -120,7 +120,7 @@ static void jpec_enc_write_dqt(jpec_enc_t *e)
   }
 }
 
-static void jpec_enc_write_sof0(jpec_enc_t *e) {
+ void jpec_enc_write_sof0(jpec_enc_t *e) {
   jpec_buffer_write_2bytes(e->buf, 0xFFC0); /* SOF0 marker */
   jpec_buffer_write_2bytes(e->buf, 0x000B); /* segment length */
   jpec_buffer_write_byte(e->buf, 0x08);     /* 8-bit precision */
@@ -132,7 +132,7 @@ static void jpec_enc_write_sof0(jpec_enc_t *e) {
   jpec_buffer_write_byte(e->buf, 0x00);     /* quantization table 0 */
 }
 
-static void jpec_enc_write_dht(jpec_enc_t *e)
+ void jpec_enc_write_dht(jpec_enc_t *e)
 {
   jpec_buffer_write_2bytes(e->buf, 0xFFC4);          /* DHT marker */
   jpec_buffer_write_2bytes(e->buf, 19 + jpec_dc_nb_vals); /* segment length */
@@ -154,7 +154,7 @@ static void jpec_enc_write_dht(jpec_enc_t *e)
   }
 }
 
-static void jpec_enc_write_sos(jpec_enc_t *e)
+ void jpec_enc_write_sos(jpec_enc_t *e)
 {
   jpec_buffer_write_2bytes(e->buf, 0xFFDA); /* SOS marker */
   jpec_buffer_write_2bytes(e->buf, 8);      /* segment length */
@@ -167,7 +167,7 @@ static void jpec_enc_write_sos(jpec_enc_t *e)
   jpec_buffer_write_byte(e->buf, 0x00);
 }
 
-static int jpec_enc_next_block(jpec_enc_t *e)
+ int jpec_enc_next_block(jpec_enc_t *e)
 {
   int rv = (++e->bnum >= e->bmax) ? 0 : 1;
   if (rv) {
@@ -177,7 +177,7 @@ static int jpec_enc_next_block(jpec_enc_t *e)
   return rv;
 }
 
-static void jpec_enc_block_dct(jpec_enc_t *e)
+ void jpec_enc_block_dct(jpec_enc_t *e)
 {
 #define JPEC_BLOCK(col,row) e->img[(((e->by + row) < e->h) ? e->by + row : e->h-1) * \
 							e->w + (((e->bx + col) < e->w) ? e->bx + col : e->w-1)]
@@ -227,17 +227,17 @@ static void jpec_enc_block_dct(jpec_enc_t *e)
 #undef JPEC_BLOCK
 }
 
-static void jpec_enc_block_quant(jpec_enc_t *e)
+ void jpec_enc_block_quant(jpec_enc_t *e)
 {
-  assert(e && e->bnum >= 0);
+  //assert(e && e->bnum >= 0);
   for (int i = 0; i < 64; i++) {
 	e->block.quant[i] = (int) (e->block.dct[i]/e->dqt[i]);
   }
 }
 
-static void jpec_enc_block_zz(jpec_enc_t *e)
+ void jpec_enc_block_zz(jpec_enc_t *e)
 {
-  assert(e && e->bnum >= 0);
+  //assert(e && e->bnum >= 0);
   e->block.len = 0;
   for (int i = 0; i < 64; i++) {
 	if ((e->block.zz[i] = e->block.quant[jpec_zz[i]])) e->block.len = i + 1;

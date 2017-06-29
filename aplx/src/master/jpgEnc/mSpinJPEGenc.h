@@ -7,7 +7,7 @@
 #include <spin1_api.h>
 #include <stdbool.h>
 #include "conf.h"
-#include "SpinJPEG.h"
+#include "../../SpinJPEG.h"
 
 /********************** MACROS/DATATYPES definitions ***********************/
 
@@ -37,7 +37,7 @@ typedef struct jpec_buffer_t_ {
 
 /** Entropy coding data that hold state along blocks */
 typedef struct jpec_huff_state_t_ {
-  int32_t buffer;             /* bits buffer */
+  int buffer;             /* bits buffer */
   int nbits;                  /* number of bits remaining in buffer */
   int dc;                     /* DC coefficient from previous block (or 0) */
   jpec_buffer_t *buf;         /* JPEG global buffer */
@@ -123,24 +123,24 @@ void hDMA (uint tid, uint tag);
 
 /*--- Three Main Encoder functions ---*/
 jpec_enc_t *jpec_enc_new(const uchar *img, ushort w, ushort h, int q);  /* Create a JPEG encoder */
-const uchar *jpec_enc_run(jpec_enc_t *e, int *len);						/* Run the JPEG encoding */
+uchar *jpec_enc_run(jpec_enc_t *e, int *len);						/* Run the JPEG encoding */
 void jpec_enc_del(jpec_enc_t *e);										/* Release a JPEG encoder object */
 
 /*--- Various encoder functions ---*/
 // from enc.c
-static void jpec_enc_init_dqt(jpec_enc_t *e);
-static void jpec_enc_open(jpec_enc_t *e);
-static void jpec_enc_close(jpec_enc_t *e);
-static void jpec_enc_write_soi(jpec_enc_t *e);
-static void jpec_enc_write_app0(jpec_enc_t *e);
-static void jpec_enc_write_dqt(jpec_enc_t *e);
-static void jpec_enc_write_sof0(jpec_enc_t *e);
-static void jpec_enc_write_dht(jpec_enc_t *e);
-static void jpec_enc_write_sos(jpec_enc_t *e);
-static int jpec_enc_next_block(jpec_enc_t *e);
-static void jpec_enc_block_dct(jpec_enc_t *e);
-static void jpec_enc_block_quant(jpec_enc_t *e);
-static void jpec_enc_block_zz(jpec_enc_t *e);
+void jpec_enc_init_dqt(jpec_enc_t *e);
+void jpec_enc_open(jpec_enc_t *e);
+void jpec_enc_close(jpec_enc_t *e);
+void jpec_enc_write_soi(jpec_enc_t *e);
+void jpec_enc_write_app0(jpec_enc_t *e);
+void jpec_enc_write_dqt(jpec_enc_t *e);
+void jpec_enc_write_sof0(jpec_enc_t *e);
+void jpec_enc_write_dht(jpec_enc_t *e);
+void jpec_enc_write_sos(jpec_enc_t *e);
+int jpec_enc_next_block(jpec_enc_t *e);
+void jpec_enc_block_dct(jpec_enc_t *e);
+void jpec_enc_block_quant(jpec_enc_t *e);
+void jpec_enc_block_zz(jpec_enc_t *e);
 
 // from buf.c
 jpec_buffer_t *jpec_buffer_new(int siz);

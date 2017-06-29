@@ -57,7 +57,7 @@ dkms.conf
 **/images
 **/bin
 **/binaries
-**/include
+#**/include
 **/lib
 **/lib64
 **/.idea

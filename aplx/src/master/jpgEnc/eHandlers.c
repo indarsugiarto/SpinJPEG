@@ -9,7 +9,7 @@ void hFR (uint key, uint payload)
 		wImg = payload >> 16;
 		hImg = payload & 0xFFFF;
 		break;
-	case FRPL_NEW_IMG_ADDR_KEY:
+    case FRPL_NEW_RAW_IMG_ADDR_KEY:
 		sdramImgBuf = (uchar *)payload;
 		io_printf(IO_BUF, "Got img %dx%d buffered at 0x%x\n", wImg, hImg, payload);
 		spin1_schedule_callback(encode, 0, 0, 1);

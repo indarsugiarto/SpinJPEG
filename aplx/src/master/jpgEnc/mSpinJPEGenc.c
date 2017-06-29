@@ -22,7 +22,7 @@ void encode(uint arg0, uint arg1)
 	e = jpec_enc_new(sdramImgBuf, wImg, hImg, jpgQ);
 	jpgResult = jpec_enc_run(e, &szjpgResult);
 	// TODO: send the result to host-PC
-	sendJPG((uint)jpgResult, uint(szjpgResult));
+    sendJPG((uint)jpgResult, (uint)szjpgResult);
 	jpec_enc_del(e);
 }
 
@@ -73,7 +73,7 @@ void sendJPG(uint imgAddr, uint imgSize)
 	// then release dtcmImgBuf
 	sark_free(dtcmImgBuf);
 	// finally, inform host that transmission is complete
-	sdpResult.length = sizeof(sdp_hdr);	// empty message == EOF
+    sdpResult.length = sizeof(sdp_hdr_t);	// empty message == EOF
 	spin1_send_sdp_msg(&sdpResult, 10);
 }
 

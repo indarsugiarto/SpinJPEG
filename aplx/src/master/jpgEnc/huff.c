@@ -23,8 +23,8 @@
 #endif
 
 /* Private function prototypes */
-static void jpec_huff_encode_block_impl(jpec_block_t *block, jpec_huff_state_t *s);
-static void jpec_huff_write_bits(jpec_huff_state_t *s, unsigned int bits, int n);
+void jpec_huff_encode_block_impl(jpec_block_t *block, jpec_huff_state_t *s);
+void jpec_huff_write_bits(jpec_huff_state_t *s, unsigned int bits, int n);
 
 void jpec_huff_skel_init(jpec_huff_skel_t *skel) {
   memset(skel, 0, sizeof(*skel));
@@ -45,7 +45,7 @@ jpec_huff_t *jpec_huff_new(void) {
 void jpec_huff_del(jpec_huff_t *h) {
   /* Flush any remaining bits and fill in the incomple byte (if any) with 1-s */
   jpec_huff_write_bits(&h->state, 0x7F, 7);
-  free(h);
+  sark_free(h);
 }
 
 void jpec_huff_encode_block(jpec_huff_t *h, jpec_block_t *block, jpec_buffer_t *buf) {
@@ -61,7 +61,7 @@ void jpec_huff_encode_block(jpec_huff_t *h, jpec_block_t *block, jpec_buffer_t *
   h->state.buf = state.buf;
 }
 
-static void jpec_huff_encode_block_impl(jpec_block_t *block, jpec_huff_state_t *s) {
+void jpec_huff_encode_block_impl(jpec_block_t *block, jpec_huff_state_t *s) {
   int val, bits, nbits;
   /* DC coefficient encoding */
   if (block->len > 0) {
@@ -120,7 +120,7 @@ static void jpec_huff_encode_block_impl(jpec_block_t *block, jpec_huff_state_t *
  *   first transformed by bitwise complement(|initial value|)
  * - if an 0xFF byte is detected a 0x00 stuff byte is automatically written right after
  */
-static void jpec_huff_write_bits(jpec_huff_state_t *s, unsigned int bits, int n) {
+void jpec_huff_write_bits(jpec_huff_state_t *s, unsigned int bits, int n) {
   int mask = (((int) 1) << n) - 1;
   int buffer = (int) bits;
   int nbits = s->nbits + n;
