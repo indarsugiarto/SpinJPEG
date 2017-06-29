@@ -5,16 +5,8 @@ import struct
 import argparse
 import time
 import os
+from spinConfig import *
 
-#-------- SpiNNaker-related parameters --------
-SDP_RECV_DATA_PORT = 1
-SDP_RECV_CMD_PORT = 2
-SDP_RECV_CORE = 2
-SDP_CMD_INIT_SIZE = 1
-SPINN_HOST = '192.168.240.253'
-SPINN_PORT = 17893
-DELAY_IS_ON = True
-DELAY_SEC = 0.1 #useful for debugging
 
 class imgWidget(QtGui.QWidget):
     def __init__(self, Title, parent=None):
@@ -129,7 +121,7 @@ class cViewerDlg(QtGui.QWidget):
         print "[INFO] Total (max) bandwidth usage = {} KBps".format(bw_KB)
 
     def sendImgInfo(self):
-        dpc = (SDP_RECV_CMD_PORT << 5) + SDP_RECV_CORE #destination port and core
+        dpc = (SDP_RECV_JPG_INFO_PORT << 5) + SDP_RECV_CORE_ID #destination port and core
         pad = struct.pack('2B',0,0)
         hdr = struct.pack('4B2H',7,0,dpc,255,0,0)
         scp = struct.pack('2H3I',SDP_CMD_INIT_SIZE,0,self.szImgFile,0,0)
@@ -143,7 +135,7 @@ class cViewerDlg(QtGui.QWidget):
     def sendChunk(self, chunk):
         # based on sendSDP()
         # will be sent to chip <0,0>, no SCP
-        dpc = (SDP_RECV_DATA_PORT << 5) + SDP_RECV_CORE #destination port and core
+        dpc = (SDP_RECV_JPG_DATA_PORT << 5) + SDP_RECV_CORE_ID #destination port and core
         pad = struct.pack('2B',0,0)
         hdr = struct.pack('4B2H',7,0,dpc,255,0,0)
         if chunk is not None:

@@ -76,10 +76,10 @@ typedef struct {
 /*********************** SDP MECHANISM *************************/
 /*--- For JPEG file ---*/
 #define SDP_PORT_JPEG_DATA	1
-#define SDP_PORT_JPEG_CMD	2
+#define SDP_PORT_JPEG_INFO	2
 /*--- For Raw RGB file ---*/
 #define SDP_PORT_RAW_DATA   3
-#define SDP_PORT_RAW_CMD    4
+#define SDP_PORT_RAW_INFO    4
 /*--- For both ---*/
 #define SDP_CMD_INIT_SIZE	1
 

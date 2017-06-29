@@ -5,33 +5,41 @@ import struct
 import argparse
 import time
 import os
-
-# -------- SpiNNaker-related parameters --------
-SDP_RECV_DATA_PORT = 1
-SDP_RECV_CMD_PORT = 2
-SDP_SEND_RESULT_PORT = 30000
-SDP_RECV_CORE = 10
-SDP_CMD_INIT_SIZE = 1
-SPINN_HOST = '192.168.240.253'
-SPINN_PORT = 17893
-DELAY_IS_ON = True
-DELAY_SEC = 0.1  # useful for debugging
+from spinConfig import *
 
 class sdpReceiver(QtCore.QObject):
     """
     class sdpReceiver acts as a UDP server that constantly monitor port SDP_SEND_RESULT_PORT
     """
+    finished = QtCore.pyqtSignal()
+    newchunk = QtCore.pyqtSignal(bytearray)
     def __init__(self, parent=None):
         super(sdpReceiver, self).__init__(parent)
         self.sock = QtNetwork.QUdpSocket(self)
         self.sock.bind(SDP_SEND_RESULT_PORT)
         self.sock.readyRead.connect(self.processPendingDatagrams)
 
+    def processPendingDatagrams(self):
+        while self.sock.hasPendingDatagrams():
+            datagram, host, port = self.udpSocket.readDatagram(self.udpSocket.pendingDatagramSize())
+
+            try:
+                TODO
+                # Python v3.
+                datagram = str(datagram, encoding='ascii')
+            except TypeError:
+                # Python v2.
+                pass
+
+            self.statusLabel.setText("Received datagram: \"%s\"" % datagram)
     def run(self):
         """
 
         :return:
         """
+
+    def stop(self):
+        self.finished.emit()
 
     @QtCore.pyqtSlot()
     def processPendingDatagrams(self):
@@ -62,24 +70,27 @@ class cViewerDlg(QtGui.QWidget):
         # super(cViewerDlg, self).__init__(parent)
         QtGui.QWidget.__init__(self, parent)
         self.setupGui()
-        self.connect(self.pbLoadSend, QtCore.SIGNAL("clicked()"), QtCore.SLOT("pbLoadSendClicked()"))
         if SpiNN is None:
             print "[INFO] Will use default machine at", SPINN_HOST
             self.spinn = SPINN_HOST
         else:
             self.spinn = SpiNN
+
         # prepare the sdp receiver
+        self.setupUDP()
+
+    def closeEvent(self, event):
+        self.sdpRecv.stop()
+        event.accept()
+
+    def setupUDP(self):
         self.sdpRecv = sdpReceiver(self)
         self.sdpRecvThread = QtCore.QThread()
         self.sdpRecv.moveToThread(self.sdpRecvThread)
         self.sdpRecvThread.started.connect(self.sdpRecv.run)
-        # TODO: complete these:
-        connect(worker, SIGNAL(error(QString)), this, SLOT(errorString(QString)));
-        connect(thread, SIGNAL(started()), worker, SLOT(process()));
-        connect(worker, SIGNAL(finished()), thread, SLOT(quit()));
-        connect(worker, SIGNAL(finished()), worker, SLOT(deleteLater()));
-        connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
-
+        self.sdpRecvThread.finished.connect(self.sdpRecvThread.deleteLater)
+        self.sdpRecv.finished.connect(self.sdpRecv.deleteLater)
+        self.sdpRecv.finished.connect(self.sdpRecvThread.quit)
         self.sdpRecvThread.start()
 
     def setupGui(self):
@@ -89,6 +100,7 @@ class cViewerDlg(QtGui.QWidget):
         self.pbLoadSend.setGeometry(QtCore.QRect(0, 0, 92, 29))
         self.pbLoadSend.setObjectName("pbLoadSend")
         self.pbLoadSend.setText("Load-n-Send")
+        self.connect(self.pbLoadSend, QtCore.SIGNAL("clicked()"), QtCore.SLOT("pbLoadSendClicked()"))
 
     @QtCore.pyqtSlot()
     def pbLoadSendClicked(self):
@@ -96,32 +108,25 @@ class cViewerDlg(QtGui.QWidget):
             self.sendImg()
 
     def loadImg(self):
-        self.fName = QtGui.QFileDialog.getOpenFileName(caption="Load image file",
-                                                       filter="JPEG Images (*.jpg *.JPG *.jpeg)")
-        # self.fName = QtGui.QFileDialog.getOpenFileName(caption="Load image file", filter="*.*")
+        self.fName = QtGui.QFileDialog.getOpenFileName(caption="Load Image File",
+                                                       filter="Raw Gray Image (*.ra1)")
         if self.fName == "" or self.fName is None:
             print "[INFO] Ups... cancelled!"
             self.fName = None
             return False
         else:
-            print "[INFO] Loading image: ", self.fName
-            self.orgImg = QtGui.QImage()
-            self.orgImgLoaded = self.orgImg.load(self.fName)
-            if self.orgImgLoaded:
-                w = self.orgImg.width()
-                h = self.orgImg.height()
-                d = self.orgImg.depth()
-                c = self.orgImg.colorCount()
-                print "[INFO] Image info: w={}, h={}, d={}, c={}".format(w, h, d, c)
-                pixmap = QtGui.QPixmap()
-                pixmap.convertFromImage(self.orgImg)
-                self.orgImgViewer = imgWidget("Original Image")
-                self.orgImgViewer.setPixmap(pixmap)
-                self.szImgFile = os.path.getsize(self.fName)
-                return True
-            else:
-                print "[FAIL] Cannot load image file!"
+            self.wImg, ok = QtGui.QInputDialog.getInt(self, "Get Image Width", "Width (px)")
+            if ok is False:
                 return False
+            self.hImg, ok = QtGui.QInputDialog.getInt(self, "Get Image Height", "Height (px)")
+            if ok is False:
+                return False
+            print "[INFO] Loading raw image: ", self.fName
+            # read the raw data and put into memory
+            # for info see this: http://www.devdungeon.com/content/working-binary-data-python
+            with open(self.fname, "rb") as bf:
+                self.orgImg = bf.read()     # read the whole file at once
+            return True
 
     def sendImg(self):
         """
@@ -139,51 +144,46 @@ class cViewerDlg(QtGui.QWidget):
               is bigger), then we need to introduce another delay here
         """
 
-        print "[INFO] Sending image data to SpiNNaker...",
+        print "[INFO] Sending raw image data to SpiNNaker...",
+        #iterate until all data in self.orgImg is sent
         cntr = 0
-        szData = 0
-        tic_is_set = False
-        with open(self.fName, "rb") as f:
-            chunk = f.read(272)  # 272 = 256(data) + 16(SCP)
-            while chunk != "":
-                ba = bytearray(chunk)
-                lba = len(ba)  # should be SCP+data only, which is 272 max
-                if lba > 0:
-                    if tic_is_set is False:
-                        tic = time.time()
-                        tic_is_set = True
-                    self.sendChunk(ba)
-                    cntr += 1
-                    szData += (lba + 46 + 8)  # consider udp_payload and sdp_hdr
-                chunk = f.read(272)
-            self.sendChunk(None)  # end of image transmission
-            toc = time.time()
-            szData += (10 + 46)  # sdp_hdr + udp_payload
+        szSDP = 272                 # length of a chunk
+        szImg = len(self.orgImg)    # length of original data
+        szRem = szImg               # size of remaining data to be sent
+        sPtr = 0                    # start index of slicer
+        ePtr = szSDP                # end index of slicer
+        while szRem > 0:
+            if szSDP < szRem:
+                chunk = self.orgImg[sPtr:ePtr]
+            else:
+                szSDP = szRem
+                chunk = self.orgImg[sPtr:]
+            self.sendChunk(chunk)
+            cntr += 1
+            szRem -= szSDP
+            sPtr += ePtr
+            ePtr += szSDP
+        # finally, send EOF (end of image transmission)
+        self.sendChunk(None)
         print "done in {} chunks!".format(cntr)
-        # calculate bandwidth usage
-        elapse_sec = toc - tic
-        bw_KB = (szData / 1024) / elapse_sec
-        print "[INFO] Image file size =", self.szImgFile, "Byte = ", self.szImgFile / 1024, "KB"
-        print "[INFO] Total size of UDP packets =", szData / 1024, "KB"
-        print "[INFO] Elapsed time in sec = ", elapse_sec
-        print "[INFO] Total (max) bandwidth usage = {} KBps".format(bw_KB)
+
 
     def sendImgInfo(self):
-        dpc = (SDP_RECV_CMD_PORT << 5) + SDP_RECV_CORE  # destination port and core
+        dpc = (SDP_RECV_RAW_INFO_PORT << 5) + SDP_RECV_CORE_ID  # destination port and core
         pad = struct.pack('2B', 0, 0)
         hdr = struct.pack('4B2H', 7, 0, dpc, 255, 0, 0)
-        scp = struct.pack('2H3I', SDP_CMD_INIT_SIZE, 0, self.szImgFile, 0, 0)
+        scp = struct.pack('2H3I', SDP_CMD_INIT_SIZE, 0, len(self.orgImg), self.wImg, self.hImg)
         sdp = pad + hdr + scp
         CmdSock = QtNetwork.QUdpSocket()
         CmdSock.writeDatagram(sdp, QtNetwork.QHostAddress(self.spinn), SPINN_PORT)
         CmdSock.flush()
-        # then give a break, otherwise spinnaker will collapse
+        # then give a break, otherwise spinnaker might collapse
         self.delay()
 
     def sendChunk(self, chunk):
         # based on sendSDP()
         # will be sent to chip <0,0>, no SCP
-        dpc = (SDP_RECV_DATA_PORT << 5) + SDP_RECV_CORE  # destination port and core
+        dpc = (SDP_RECV_RAW_DATA_PORT << 5) + SDP_RECV_CORE_ID  # destination port and core
         pad = struct.pack('2B', 0, 0)
         hdr = struct.pack('4B2H', 7, 0, dpc, 255, 0, 0)
         if chunk is not None:

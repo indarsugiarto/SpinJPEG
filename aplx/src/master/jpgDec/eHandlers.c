@@ -15,7 +15,7 @@ void hSDP (uint mBox, uint port)
 #endif
 
     /*--------------------- JPEG File version -----------------------*/
-    if (port == SDP_PORT_JPEG_CMD) {
+	if (port == SDP_PORT_JPEG_INFO) {
         if (msg->cmd_rc == SDP_CMD_INIT_SIZE) {
             //resizeImgBuf(msg->arg1, NULL);
             szImgFile = msg->arg1;
@@ -56,7 +56,7 @@ void hSDP (uint mBox, uint port)
 
 	/*--------------------- Raw File version -----------------------*/
 	/* invoke mSpinJPEGenc to encode it */
-    else if (port == SDP_PORT_RAW_CMD) {
+	else if (port == SDP_PORT_RAW_INFO) {
         if (msg->cmd_rc == SDP_CMD_INIT_SIZE) {
             szImgFile = msg->arg1;
 			wImg = (ushort)msg->arg2;	// for raw image, this info is explicit from host-PC
