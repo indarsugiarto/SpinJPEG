@@ -1,0 +1,8 @@
+Untuk menghasilkan raw image gunakan:
+./myJpegNoHeader
+
+Untuk menghasilkan raw image .ra1 (grayscale/monchrome):
+1. Siapkan file jpg yang grayscale only (misal namanya myGrayImg.jpg
+2. Jalankan ./myJpegNoHeader myGrayImg.jpg --> akan menghasilkan myGrayImg.ras
+3. Jalankan ./reduce myGrayImg.ras --> akan menghasilkan myGrayImg.ra1
+

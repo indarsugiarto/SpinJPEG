@@ -1,0 +1,22 @@
+CC	= gcc
+CFLAGS	= -ansi -pedantic -Wall -O
+PFLAGS = -pg
+
+VLD	= tree
+
+BIN	= .
+INCS	= jpeg.h
+OBJS	= parse.o jpeg.o utils.o color.o huffman.o spy.o $(VLD)_vld.o fast_int_idct.o
+LIBS	= -lm
+PROG	= myJpegNoHeader
+RM	= rm -f
+
+all: clean $(PROG) 
+
+$(PROG):$(OBJS)
+	$(CC) $(CFLAGS) -o $(BIN)/$@ $(OBJS) $(LIBS)
+
+clean:
+	$(RM) $(PROG) $(MYPROG) *.o *.ras
+
+$(OBJS) : $(INCS)

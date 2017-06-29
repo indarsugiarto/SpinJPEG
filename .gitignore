@@ -70,4 +70,7 @@ dkms.conf
 *.pro.user*
 *.aplx
 run*
+*.jpg
+*.ras
+*.ra1
 
