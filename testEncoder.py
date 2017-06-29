@@ -7,47 +7,6 @@ import time
 import os
 from spinConfig import *
 
-class sdpReceiver(QtCore.QObject):
-    """
-    class sdpReceiver acts as a UDP server that constantly monitor port SDP_SEND_RESULT_PORT
-    """
-    finished = QtCore.pyqtSignal()
-    newchunk = QtCore.pyqtSignal(bytearray)
-    def __init__(self, parent=None):
-        super(sdpReceiver, self).__init__(parent)
-        self.sock = QtNetwork.QUdpSocket(self)
-        self.sock.bind(SDP_SEND_RESULT_PORT)
-        self.sock.readyRead.connect(self.processPendingDatagrams)
-
-    def processPendingDatagrams(self):
-        while self.sock.hasPendingDatagrams():
-            datagram, host, port = self.udpSocket.readDatagram(self.udpSocket.pendingDatagramSize())
-
-            try:
-                TODO
-                # Python v3.
-                datagram = str(datagram, encoding='ascii')
-            except TypeError:
-                # Python v2.
-                pass
-
-            self.statusLabel.setText("Received datagram: \"%s\"" % datagram)
-    def run(self):
-        """
-
-        :return:
-        """
-
-    def stop(self):
-        self.finished.emit()
-
-    @QtCore.pyqtSlot()
-    def processPendingDatagrams(self):
-        """
-        Do something when new data arrives
-        :return:
-        """
-
 class imgWidget(QtGui.QWidget):
     def __init__(self, Title, parent=None):
         QtGui.QWidget.__init__(self, parent)
@@ -84,14 +43,20 @@ class cViewerDlg(QtGui.QWidget):
         event.accept()
 
     def setupUDP(self):
-        self.sdpRecv = sdpReceiver(self)
-        self.sdpRecvThread = QtCore.QThread()
-        self.sdpRecv.moveToThread(self.sdpRecvThread)
-        self.sdpRecvThread.started.connect(self.sdpRecv.run)
-        self.sdpRecvThread.finished.connect(self.sdpRecvThread.deleteLater)
-        self.sdpRecv.finished.connect(self.sdpRecv.deleteLater)
-        self.sdpRecv.finished.connect(self.sdpRecvThread.quit)
-        self.sdpRecvThread.start()
+        self.sdpRecv = QtNetwork.QUdpSocket(self)
+        self.sdpRecv.bind(SDP_SEND_RESULT_PORT)
+        self.sdpRecv.readyRead.connect(self.readSDP)
+
+	def resetRecvBuf(self):
+        self.resultImg = bytearray()
+
+    @QtCore.pyqtSlot()
+    def readSDP(self):
+        while self.sdpRecv.hasPendingDatagrams():
+            datagram, host, port = self.sdpRecv.readDatagram(self.sdpRecv.pendingDatagramSize())
+            self.resultImg.append(datagram)
+        TODO : how to detect EOF? And what to do afterwards?
+
 
     def setupGui(self):
         self.setWindowTitle("Tester")
@@ -105,6 +70,7 @@ class cViewerDlg(QtGui.QWidget):
     @QtCore.pyqtSlot()
     def pbLoadSendClicked(self):
         if self.loadImg() is True:
+            self.resetRecvBuf()
             self.sendImg()
 
     def loadImg(self):
@@ -137,12 +103,6 @@ class cViewerDlg(QtGui.QWidget):
         print "[INFO] Sending image info to SpiNNaker...",
         self.sendImgInfo()
         print "done!"
-
-        """
-        ######################### IMPORTANT !!! ############################
-        TODO: if spinjpeg needs to re-create sdram buffer (because the new image
-              is bigger), then we need to introduce another delay here
-        """
 
         print "[INFO] Sending raw image data to SpiNNaker...",
         #iterate until all data in self.orgImg is sent
