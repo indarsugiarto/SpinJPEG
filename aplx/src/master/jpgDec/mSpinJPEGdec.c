@@ -27,295 +27,6 @@ void c_main()
 
 
 
-
-
-
-
-/*-------------------------- DECODER MAIN LOOP --------------------------*/
-/*-----------------------------------------------------------------------*/
-/* Based on jpeg.c, main for jfif decoder by Pierre Guerrier
- * decode() will be called when the first chunk has arrived.
- * See hDMA() and hUEvent()
- */
-
-/*--- Function prototypes ---*/
-void get_SOF(uchar *fi);
-void get_DHT(uchar *fi);
-void get_DQT(uchar *fi);
-void get_DRI(uchar *fi, int *ri);
-void get_SOS(uchar *fi, int ri);
-void get_EOI();
-void decode(uint arg0, uint arg1)
-{
-    uint aux, mark;
-    int restart_interval; /* RST check */
-    int i,j;
-
-    // at this point, the sdramImgBuf is already created
-    uchar *fi = sdramImgBuf;
-
-    /* First find the SOI marker: */
-    aux = get_next_MK(fi);
-    if (aux != SOI_MK) aborted_stream(ON_ELSE);
-#if(DEBUG_MODE>0)
-    io_printf(IO_BUF, "[INFO] Found the SOI marker at %d!\n", nCharRead);
-#endif
-
-    in_frame = 0;
-    restart_interval = 0;
-    for (i = 0; i < 4; i++)
-      QTvalid[i] = 0;
-
-    /* Now process segments as they appear: */
-    do {
-        mark = get_next_MK(fi);
-        switch (mark) {
-        case SOF_MK: /* start of frame marker */
-            get_SOF(fi); break;
-        case DHT_MK: /* Define Huffman Table */
-            get_DHT(fi); break;
-        case DQT_MK: /* Define Quantization Table */
-            get_DQT(fi); break;
-        case DRI_MK: /* Define Restart Interval */
-            get_DRI(fi, &restart_interval); break;
-        case SOS_MK:
-            get_SOS(fi, restart_interval); break;
-        case EOI_MK:
-            get_EOI(); break;
-        case COM_MK:
-#if(DEBUG_MODE>0)
-            io_printf(IO_BUF, "[INFO] Skipping comments\n");
-#endif
-            skip_segment(fi); break;
-        case EOF:
-#if(DEBUG_MODE>0)
-            io_printf(IO_BUF, "[ERROR] Ran out of input data!\n");
-#endif
-            aborted_stream(ON_ELSE); break;
-        default:
-            if ((mark & MK_MSK) == APP_MK) {
-#if(DEBUG_MODE>0)
-                io_printf(IO_BUF, "[INFO] Skipping application data\n");
-#endif
-                skip_segment(fi); break;
-            }
-            if (RST_MK(mark)) {
-                reset_prediction(); break;
-            }
-            /* if all else has failed ... */
-#if(DEBUG_MODE>0)
-            io_printf(IO_BUF, "[WARNING] Lost Sync outside scan, %d!\n", mark);
-#endif
-            aborted_stream(ON_ELSE); break;
-        }
-    }
-    while (1);
-
-    // TODO: decoding is finish, what now?
-    io_printf(IO_STD, "Decoding is done!\n");
-}
-
-
-/*--- Function implementation ---*/
-void get_SOF(uchar *fi)
-{
-    uint aux, i;
-#if(DEBUG_MODE>0)
-    io_printf(IO_BUF, "[INFO] Found the SOF marker at-%d!\n", nCharRead);
-#endif
-    in_frame = 1;
-    get_size(fi);	/* header size, don't care */
-    fgetc(fi);	/* precision, 8bit, don't care */
-    y_size = get_size(fi); x_size = get_size(fi); /* Video frame size ??? */
-    n_comp = fgetc(fi);	/* # of components */
-#if(DEBUG_MODE>0)
-    io_printf(IO_BUF, "[INFO] Image size is %d by %d\n", x_size, y_size);
-    uchar clrStr[12];
-    switch (n_comp){
-    case 1: io_printf(clrStr, "Monochrome"); break;
-    case 3: io_printf(clrStr, "Color"); break;
-    default: io_printf(clrStr, "Not a"); break;
-    }
-    io_printf(IO_BUF, "[INFO] %s JPEG image!\n", clrStr);
-#endif
-
-    for (i = 0; i < n_comp; i++) {
-        /* component specifiers */
-        comp[i].CID = fgetc(fi);
-        aux = fgetc(fi);
-        comp[i].HS = first_quad(aux);
-        comp[i].VS = second_quad(aux);
-        comp[i].QT = fgetc(fi);
-    }
-#if(DEBUG_MODE>0)
-    if (n_comp > 1)
-        io_printf(IO_BUF, "[INFO] Color format is %d:%d:%d, H=%d\n",
-                            comp[0].HS * comp[0].VS,
-                            comp[1].HS * comp[1].VS,
-                            comp[2].HS * comp[2].VS,
-                            comp[1].HS);
-#endif
-    if (init_MCU() == -1)
-        aborted_stream(ON_ELSE);
-
-    /* dimension scan buffer for YUV->RGB conversion */
-    uint sz;
-    sz = x_size * y_size * n_comp;
-    FrameBuffer = (uchar *)sark_xalloc(sv->sdram_heap, sz, 0, ALLOC_LOCK);
-    sz = MCU_sx * MCU_sy * n_comp;
-    ColorBuffer = (uchar *)sark_xalloc(sv->sdram_heap, sz, 0, ALLOC_LOCK);
-    FBuff = (FBlock *) sark_alloc(1, sizeof(FBlock));
-    PBuff = (PBlock *) sark_alloc(1, sizeof(PBlock));
-
-    if ((FrameBuffer == NULL) || (ColorBuffer == NULL) ||
-        (FBuff == NULL) || (PBuff == NULL) ) {
-#if(DEBUG_MODE>0)
-            io_printf(IO_BUF, "[ERROR] Could not allocate pixel storage!\n");
-#endif
-            aborted_stream(ON_EXIT);
-    }
-}
-
-void get_DHT(uchar *fi)
-{
-#if(DEBUG_MODE>0)
-    io_printf(IO_BUF, "[INFO] Defining Huffman Tables found at-%d\n", nCharRead);
-#endif
-    if (load_huff_tables(fi) == -1)
-        aborted_stream(ON_ELSE);
-}
-
-void get_DQT(uchar *fi)
-{
-#if(DEBUG_MODE>0)
-    io_printf(IO_BUF, "[INFO] Defining Quantization Tables at-%d\n", nCharRead);
-#endif
-    if (load_quant_tables(fi) == -1)
-        aborted_stream(ON_ELSE);
-}
-
-void get_DRI(uchar *fi, int *ri)
-{
-    get_size(fi);	/* skip size */
-    *ri = get_size(fi);
-#if(DEBUG_MODE>0)
-    io_printf(IO_BUF, "[INFO] Defining Restart Interval %d\n", *ri);
-#endif
-}
-
-void get_SOS(uchar *fi, int restart_interval)
-{
-    uint aux;
-    int n_restarts, leftover; /* RST check */
-    int i,j;
-
-#if(DEBUG_MODE>0)
-    io_printf(IO_BUF, "[INFO] Found the SOS marker at-%d!\n", nCharRead);
-#endif
-    get_size(fi); /* don't care */
-    aux = fgetc(fi);
-    if (aux != (unsigned int) n_comp) {
-#if(DEBUG_MODE>0)
-        io_printf(IO_BUF, "[ERROR] Bad component interleaving!\n");
-#endif
-        aborted_stream(ON_ELSE);
-    }
-
-    for (i = 0; i < n_comp; i++) {
-        aux = fgetc(fi);
-        if (aux != comp[i].CID) {
-#if(DEBUG_MODE>0)
-            io_printf(IO_BUF, "[ERROR] Bad Component Order!\n");
-#endif
-            aborted_stream(ON_ELSE);
-        }
-        aux = fgetc(fi);
-        comp[i].DC_HT = first_quad(aux);
-        comp[i].AC_HT = second_quad(aux);
-    }
-    get_size(fi); fgetc(fi);	/* skip things */
-
-    MCU_column = 0;
-    MCU_row = 0;
-    clear_bits();
-    reset_prediction();
-
-    /* main MCU processing loop here */
-    if (restart_interval) {
-        n_restarts = ceil_div(mx_size * my_size, restart_interval) - 1;
-        leftover = mx_size * my_size - n_restarts * restart_interval;
-        /* final interval may be incomplete */
-
-        for (i = 0; i < n_restarts; i++) {
-            for (j = 0; j < restart_interval; j++)
-                process_MCU(fi);
-            /* proc till all EOB met */
-            aux = get_next_MK(fi);
-            if (!RST_MK(aux)) {
-#if(DEBUG_MODE>0)
-                io_printf(IO_BUF, "[ERROR] Lost Sync after interval!\n");
-#endif
-                aborted_stream(ON_ELSE);
-            }
-#if(DEBUG_MODE>0)
-            else io_printf(IO_BUF, "[INFO] Found Restart Marker at-%d\n", nCharRead);
-#endif
-
-            reset_prediction();
-            clear_bits();
-        }		/* intra-interval loop */
-    }
-    else
-        leftover = mx_size * my_size;
-
-      /* process till end of row without restarts */
-    for (i = 0; i < leftover; i++)
-        process_MCU(fi);
-
-    in_frame = 0;
-}
-
-void get_EOI()
-{
-#if(DEBUG_MODE>0)
-    io_printf(IO_BUF, "[INFO] Found the EOI marker at-%d!\n", nCharRead);
-#endif
-    if (in_frame) aborted_stream(ON_ELSE);
-
-#if(DEBUG_MODE>0)
-    io_printf(IO_BUF, "[INFO] Total skipped bytes %d, total stuffers %d\n", passed, stuffers);
-#endif
-    aborted_stream(ON_FINISH);
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*------------------------ RASTER MAIN FUNCTION ---------------------------*/
-/*-------------------------------------------------------------------------*/
-
-
-
-
-
-
-
-
-
-
-
-
 /*--------------------------- HELPER FUNCTION -----------------------------*/
 /*-------------------------------------------------------------------------*/
 
@@ -326,6 +37,7 @@ void app_init ()
         spin1_callback_on (SDP_PACKET_RX, hSDP, -1);
     }
     sdramImgBufInitialized = false;
+	io_printf(IO_STD, "[mSpinJPEGdec] Started\n");
 }
 
 /* Round up to the next highest power of 2 
@@ -387,7 +99,11 @@ void resizeImgBuf(uint szFile, uint portSrc)
         sdramImgBufSize = roundUp(szFile);
 
 #if(DEBUG_MODE > 0)
-        io_printf(IO_STD, "Allocating %d-bytes of sdram buffer\n", sdramImgBufSize);
+		if(portSrc==SDP_PORT_RAW_INFO)
+			io_printf(IO_STD, "Allocating %d-bytes of sdram for image %dx%d\n",
+					  sdramImgBufSize,wImg,hImg);
+		else
+			io_printf(IO_STD, "Allocating %d-bytes of sdram\n",sdramImgBufSize);
 #endif
 
         sdramImgBuf = sark_xalloc (sv->sdram_heap, szFile, 0, ALLOC_LOCK);
@@ -398,7 +114,7 @@ void resizeImgBuf(uint szFile, uint portSrc)
             io_printf(IO_STD, "Sdram buffer is allocated at 0x%x with ptr 0x%x\n", sdramImgBuf, sdramImgBufPtr);
 #endif
         } else {
-            io_printf(IO_BUF, "[ERR] Fail to create sdramImgBuf!\n");
+			io_printf(IO_STD, "[ERR] Fail to create sdramImgBuf!\n");
             // dangerous: terminate then!
             rt_error (RTE_MALLOC);
             sdramImgBufInitialized = false;
@@ -407,23 +123,27 @@ void resizeImgBuf(uint szFile, uint portSrc)
 
     // additional function for fgetc()
     streamPtr = sdramImgBuf;
+
+	// set decoder starting flag
+	decIsStarted = false;
 }
 
 /* If fails to decode the JPEG file in sdram buffer, abort the operation gracefully */
 void aborted_stream(cond_t condition)
 {
-    io_printf(IO_BUF, "[ERROR] Abnormal end of decompression process!\n");
 #if(DEBUG_MODE>0)
     io_printf(IO_BUF, "[INFO] Total skipped bytes %d, total stuffers %d\n", passed, stuffers);
 #endif
     if(condition==ON_ELSE) {
-        free_structures(); // 24 Juni: belum selesai
+		io_printf(IO_BUF, "[ERROR] Abnormal end of decompression process!\n");
+		free_structures(); // 24 Juni: belum selesai
     } else if(condition==ON_EXIT) {
         // TODO: if called by exit(1)
     } else if(condition==ON_FINISH) {
-        // TODO: when EOI is encounterd
-        /*
-        fclose(fi);
+		emitDecodeDone();
+		free_structures();
+		/* in djpeg_orig, when EOI is encounterd:
+		fclose(fi);
         RGB_save(fo);
         fclose(fo);
         free_structures();
@@ -449,4 +169,74 @@ void free_structures()
 
     for (i=0; MCU_valid[i] != -1; i++) free(MCU_buff[i]);
     */
+}
+
+/* Ideas for emitDecodeDone:
+ * 1. Send to encoder to test encoder: NO, because the encoder is for gray only!
+ * 2. Send back to host-PC
+ * */
+void emitDecodeDone()
+{
+	streamResultToPC();
+}
+
+// initIPTag is private here:
+static void initIPTag()
+{
+	// make sure ip tag SDP_SEND_RESULT_TAG is set correctly
+	sdp_msg_t iptag;
+	iptag.flags = 0x07;	// no replay
+	iptag.tag = 0;		// internal
+	iptag.srce_addr = sv->p2p_addr;
+	iptag.srce_port = 0xE0 + coreID;	// use port-7
+	iptag.dest_addr = sv->p2p_addr;
+	iptag.dest_port = 0;				// send to "root"
+	iptag.cmd_rc = 26;
+	// set the reply tag
+	iptag.arg1 = (1 << 16) + SDP_SEND_RESULT_TAG;
+	iptag.arg2 = SDP_SEND_RESULT_PORT;
+	iptag.arg3 = SDP_HOST_IP;
+	iptag.length = sizeof(sdp_hdr_t) + sizeof(cmd_hdr_t);
+	spin1_send_sdp_msg(&iptag, 10);
+}
+
+
+void streamResultToPC()
+{
+	int i, w;
+	w = 2 * ceil_div(x_size, 2); /* round to 2 more */
+	/*
+	for (i=0; i<y_size; i++)
+		fwrite(FrameBuffer+n_comp*i*x_size, n_comp, w, fo);
+	*/
+
+	// make sure iptag is set
+	initIPTag();
+
+	// prepare sdp
+	sdp_msg_t result;
+	result.tag = SDP_SEND_RESULT_TAG;
+	result.flags = 7;
+	result.srce_addr = sv->p2p_addr;
+	result.srce_port = (SDP_PORT_RAW_DATA << 5) | coreID;
+	result.dest_addr = sv->dbg_addr;
+	result.dest_port = PORT_ETH;
+
+	// iterate until all data has been sent
+	int total = y_size * w;
+	int rem = total;
+	int sz = 272;
+	uchar *ptr = FrameBuffer;
+	do {
+		sz = sz < rem ? sz : rem;
+		result.length = sizeof(sdp_hdr_t) + sz;
+		sark_mem_cpy((void *)&result.cmd_rc, ptr, sz);
+		spin1_send_sdp_msg(&result, 10);
+		spin1_delay_us(SDP_TX_TIMEOUT);
+		ptr += sz;
+		rem -= sz;
+	} while(rem > 0);
+	// finally, send EOF
+	result.length = sizeof(sdp_hdr_t);
+	spin1_send_sdp_msg(&result, 10);
 }

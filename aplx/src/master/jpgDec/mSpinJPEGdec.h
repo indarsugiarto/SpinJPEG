@@ -16,7 +16,7 @@
 #define UE_START_DECODER    1
 
 /*----------- Debugging functionality -----------*/
-#define DEBUG_MODE	1
+#define DEBUG_MODE	2
 
 
 
@@ -50,8 +50,8 @@ int	in_frame, curcomp;   /* frame started ? current component ? */
 int	MCU_row, MCU_column; /* current position in MCU unit */
 
 /*--- RGB buffer storage ---*/
-unsigned char *ColorBuffer;   /* MCU after color conversion */
-unsigned char *FrameBuffer;   /* complete final RGB image */
+uchar *ColorBuffer;   /* MCU after color conversion */
+uchar *FrameBuffer;   /* complete final RGB image */
 PBlock        *PBuff;           /* scratch pixel buffer */
 FBlock        *FBuff;           /* scratch frequency buffer */
 
@@ -67,6 +67,7 @@ bool sdramImgBufInitialized;
 uchar *sdramImgBuf;
 uchar *sdramImgBufPtr;
 uint sdramImgBufSize;
+volatile bool decIsStarted;		// indicate if decoder has started, initialized in resizeImgBuf()
 
 /*--- Debugging variables ---*/
 uint nReceivedChunk;
@@ -97,6 +98,8 @@ void app_init ();
 void resizeImgBuf(uint szFile, uint portSrc); // portSrc can be used to distinguish, if it is for JPEG data or Raw data
 void aborted_stream(cond_t condition);
 void free_structures();
+void emitDecodeDone();
+void streamResultToPC();	// optional
 
 /*--- Event Handlers ---*/
 void hSDP (uint mBox, uint port);

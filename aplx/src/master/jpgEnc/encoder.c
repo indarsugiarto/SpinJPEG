@@ -30,20 +30,42 @@ jpec_enc_t *jpec_enc_new(const uchar *img, ushort w, ushort h, int q)
    */
   e->buf = jpec_buffer_new(bsiz);
   e->hskel = sark_alloc(1, sizeof(*e->hskel));
+#if(DEBUG_MODE>2)
+  io_printf(IO_BUF, "[jpec_enc_t] Creating jpec_enc object for image %dx%d with bsiz=%d\n",
+			e->w, e->h, bsiz);
+#endif
   return e;
 }
 
 uchar *jpec_enc_run(jpec_enc_t *e, int *len)
 {
+#if(DEBUG_MODE>2)
+  io_printf(IO_BUF, "[jpec_enc_run] Do jpg header\n");
+#endif
   jpec_enc_open(e);
   while (jpec_enc_next_block(e)) {
+#if(DEBUG_MODE>2)
+  io_printf(IO_BUF, "[jpec_enc_run] Processing dct on block\n");
+#endif
 	jpec_enc_block_dct(e);
+#if(DEBUG_MODE>2)
+  io_printf(IO_BUF, "[jpec_enc_run] Processing quantization on block\n");
+#endif
 	jpec_enc_block_quant(e);
+#if(DEBUG_MODE>2)
+  io_printf(IO_BUF, "[jpec_enc_run] Processing zz on block\n");
+#endif
 	jpec_enc_block_zz(e);
+#if(DEBUG_MODE>2)
+  io_printf(IO_BUF, "[jpec_enc_run] Processing huffman on block\n");
+#endif
 	e->hskel->encode_block(e->hskel->opq, &e->block, e->buf);
   }
   jpec_enc_close(e);
   *len = e->buf->len;
+#if(DEBUG_MODE>2)
+  io_printf(IO_STD, "[jpec_enc_run] Output at 0x%x\n", e->buf->stream);
+#endif
   return e->buf->stream;
 }
 
@@ -261,10 +283,15 @@ jpec_buffer_t *jpec_buffer_new(int siz)
   jpec_buffer_t *b = sark_alloc(1, sizeof(*b));
   b->stream = sark_xalloc(sv->sdram_heap, siz, 0, ALLOC_LOCK);
   if(b==NULL || b->stream==NULL) {
-#if(DEBUG_MODE>0)
-	  io_printf(IO_STD, "[RTE] jpec_buffer_new(): Memory allocation error!\n");
+#if(DEBUG_MODE>2)
+	  // io_printf(IO_STD, "[RTE] jpec_buffer_new(): Memory allocation error!\n");
 #endif
 	  rt_error(RTE_MALLOC);
+  }
+  else {
+#if(DEBUG_MODE>2)
+	  io_printf(IO_BUF, "[INFO] Output at 0x%x\n", b->stream);
+#endif
   }
   b->siz = siz;
   b->len = 0;

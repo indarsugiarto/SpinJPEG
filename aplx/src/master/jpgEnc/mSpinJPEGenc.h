@@ -11,7 +11,7 @@
 
 /********************** MACROS/DATATYPES definitions ***********************/
 
-#define DEBUG_MODE	1
+#define DEBUG_MODE	2
 
 #define DMA_FETCH_IMG_FOR_SDP_TAG	0x1
 

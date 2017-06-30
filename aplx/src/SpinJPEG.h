@@ -92,7 +92,8 @@ typedef struct {
 #ifndef SDP_HOST_IP             // can be specified during compile time
 #define SDP_HOST_IP		0x02F0A8C0	// This correspond to 192.168.240.2
 #endif
-#define SDP_TX_TIMEOUT          500             // can go save at almost 5Mbps
+#define SDP_TX_TIMEOUT          750             // reduced throughput but save for VGA image
+//#define SDP_TX_TIMEOUT          500             // can go save at almost 5Mbps
 //#define SDP_TX_TIMEOUT          10000000      // for debugging
 
 #endif

@@ -65,12 +65,21 @@ class cViewerDlg(QtGui.QWidget):
     @QtCore.pyqtSlot()
     def readSDP(self):
         while self.sdpRecv.hasPendingDatagrams():
-            datagram, host, port = self.sdpRecv.readDatagram(self.sdpRecv.pendingDatagramSize())
+            sz = self.sdpRecv.pendingDatagramSize()
+            # NOTE: readDatagram() will produce str, not bytearray
+            datagram, host, port = self.sdpRecv.readDatagram(sz)
+            ba = bytearray(datagram)
+            if DEBUG_MODE > 0:
+                print "Got sdp length {}-bytes".format(sz)
         # remove the first 10 bytes of SDP header
-        del datagram[0:10]
-        if len(datagram) > 0:
-            self.resultImg.append(datagram)
+        del ba[0:10]
+        if len(ba) > 0:
+            if DEBUG_MODE > 0:
+                print "Append datagram length {}-bytes".format(len(ba))
+            self.resultImg += ba
         else:
+            if DEBUG_MODE > 0:
+                print "Got EOF. Save to file!"
             self.saveResult()
 
 
@@ -106,7 +115,7 @@ class cViewerDlg(QtGui.QWidget):
             print "[INFO] Loading raw image: ", self.fName
             # read the raw data and put into memory
             # for info see this: http://www.devdungeon.com/content/working-binary-data-python
-            with open(self.fname, "rb") as bf:
+            with open(self.fName, "rb") as bf:
                 self.orgImg = bf.read()     # read the whole file at once
             return True
 
@@ -120,11 +129,11 @@ class cViewerDlg(QtGui.QWidget):
         self.sendImgInfo()
         print "done!"
 
-        print "[INFO] Sending raw image data to SpiNNaker...",
+        szImg = len(self.orgImg)    # length of original data
+        print "[INFO] Start sending raw image data of {}-bytes to SpiNNaker...".format(szImg)
         #iterate until all data in self.orgImg is sent
         cntr = 0
         szSDP = 272                 # length of a chunk
-        szImg = len(self.orgImg)    # length of original data
         szRem = szImg               # size of remaining data to be sent
         sPtr = 0                    # start index of slicer
         ePtr = szSDP                # end index of slicer
@@ -134,14 +143,18 @@ class cViewerDlg(QtGui.QWidget):
             else:
                 szSDP = szRem
                 chunk = self.orgImg[sPtr:]
-            self.sendChunk(chunk)
             cntr += 1
+            if DEBUG_MODE > 0:
+                print "Sending chunk-{} with len={}-bytes out of {}-bytes".format(cntr, len(chunk)+8, szRem) 
+            self.sendChunk(chunk)
             szRem -= szSDP
-            sPtr += ePtr
+            sPtr = ePtr
             ePtr += szSDP
         # finally, send EOF (end of image transmission)
+        if DEBUG_MODE > 0:
+            print "Sending EOF (10-to) byte SpiNNaker..."
         self.sendChunk(None)
-        print "done in {} chunks!".format(cntr)
+        print "[INFO] All done in {} chunks!".format(cntr)
 
 
     def sendImgInfo(self):
