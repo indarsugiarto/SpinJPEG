@@ -5,18 +5,27 @@
  * Here, stream is a buffer in sdram. It checks the size of JPEG file in sdram and raise EOF error if
  * the last character from the buffers has already been read.
  */
-int fgetc(uchar *stream)
+int fgetc(FILE_t *fObject)
 {
     uchar c;
-    if(nCharRead < szImgFile) {
-        sark_mem_cpy((void *)&c, (void *)streamPtr, 1);
-        streamPtr++;    // advance one character
-        nCharRead++;
+	if(fObject->nCharRead < fObject->szFile) {
+		sark_mem_cpy((void *)&c, (void *)fObject->ptrRead, 1);
+		fObject->ptrRead++;    // advance one character
+		fObject->nCharRead++;
         return (int)c;
     }
     else {
         return EOF;
     }
+}
+
+int fseek(FILE_t *fObject, int offset, int whence)
+{
+	// here we don't need to implement all whence type, just SEEK_CUR
+	if(whence == SEEK_CUR) {
+		fObject->nCharRead += offset;
+		fObject->ptrRead += offset;
+	}
 }
 
 /* Returns ceil(N/D). */

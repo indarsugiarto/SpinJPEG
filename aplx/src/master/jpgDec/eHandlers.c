@@ -133,7 +133,6 @@ static void getRawImgData(sdp_msg_t *msg)
 
 static void getJPGImgInfo(sdp_msg_t *msg)
 {
-	//resizeImgBuf(msg->arg1, NULL);
 	szImgFile = msg->arg1;
 	nReceivedChunk = 0;
 	spin1_schedule_callback(resizeImgBuf, szImgFile, SDP_PORT_JPEG_INFO, 1);
@@ -144,25 +143,25 @@ static void getJPGImgData(sdp_msg_t *msg)
 	// assuming msg->length contains correct value ???
 	uint len = msg->length - sizeof(sdp_hdr_t);
 	if(len > 0) {
-		uint tid = spin1_dma_transfer(DMA_JPG_IMG_BUF_WRITE, sdramImgBufPtr,
+		uint tid = spin1_dma_transfer(DMA_JPG_IMG_BUF_WRITE, sdramImgBuf->ptrWrite,
 						   (void *)&msg->cmd_rc, DMA_WRITE, len);
 
 #if(DEBUG_MODE>=0)
 		if(tid == 0) dmaAllocErrCntr++;
 #endif
 		// sdramImgBufPtr first initialized in resizeImgBuf()
-		sdramImgBufPtr += len;
-		nReceivedChunk++;
+		sdramImgBuf->ptrWrite += len;
+		nReceivedChunk++;	// for debugging
 #if(DEBUG_MODE>0)
-		//io_printf(IO_STD, "dma with tid-%d is requested\n", tid);
-		io_printf(IO_BUF, "sdramImgBufPtr is at 0x%x\n", sdramImgBufPtr);
+		io_printf(IO_BUF, "sdramImgBuf->ptrWrite is at 0x%x\n", sdramImgBuf->ptrWrite);
 #endif
 	}
 	// Note: GUI will send "header only" to signify end of image data
 	// end of image data detected
 	else {
 		io_printf(IO_STD, "[INFO] End-of-data is detected!\n");
-		io_printf(IO_STD, "[INFO] %d-chunks for %d-byte data are collected!\n",nReceivedChunk,szImgFile);
+		io_printf(IO_STD, "[INFO] %d-chunks for %d-byte data are collected!\n",
+				  nReceivedChunk,sdramImgBuf->szFile);
 		io_printf(IO_STD, "[INFO] dmaAllocErrCntr = %d\n", dmaAllocErrCntr);
 #if(DEBUG_MODE>0)
 		io_printf(IO_STD, "[INFO] Received %d chunks\n", nReceivedChunk);

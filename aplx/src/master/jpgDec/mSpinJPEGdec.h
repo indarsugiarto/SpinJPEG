@@ -24,6 +24,8 @@
 
 
 
+
+
 /********************** VARIABLES definitions ***********************/
 
 /*--- global variables here ---*/
@@ -64,9 +66,9 @@ uint coreID;
 
 /*--- JPG file storage ---*/
 bool sdramImgBufInitialized;
-uchar *sdramImgBuf;
-uchar *sdramImgBufPtr;
-uint sdramImgBufSize;
+FILE_t *sdramImgBuf;
+//uchar *sdramImgBufPtr;
+//uint sdramImgBufSize;			// current size of buffer to hold undecoded JPG image in sdram
 volatile bool decIsStarted;		// indicate if decoder has started, initialized in resizeImgBuf()
 
 /*--- Debugging variables ---*/
@@ -75,9 +77,6 @@ uint szImgFile;
 ushort wImg;	// this info needs to be sent from host when the image data is raw
 ushort hImg;	// this will be passed on to the encoder
 static uint dmaAllocErrCntr = 0;
-
-
-
 
 
 
@@ -110,12 +109,12 @@ void hUEvent(uint eventID, uint arg);
 /*-----------------------------------------*/
 /* prototypes from parse.c		   */
 /*-----------------------------------------*/
-uint get_next_MK(uchar *fi);
-uint get_size(uchar *fi);
+uint get_next_MK(FILE_t *fi);
+uint get_size(FILE_t *fi);
 int init_MCU(void);
 int process_MCU(uchar *fi);
 int	load_quant_tables(uchar *fi);
-void skip_segment(uchar *fi);
+void skip_segment(FILE_t *fi);
 void clear_bits();
 uchar get_one_bit(uchar *fi);
 unsigned long get_bits(uchar *fi, int number);
@@ -124,11 +123,10 @@ unsigned long get_bits(uchar *fi, int number);
 /*-----------------------------------------*/
 /* prototypes from utils.c		   */
 /*-----------------------------------------*/
-#define EOF -1
+
 /* imitating std-C fgetc() */
-static int nCharRead = 0;    //!< also related to szImgFile
-uchar *streamPtr;            //!< also related to sdramImgBuf
-int fgetc(uchar *stream);
+int fgetc(FILE_t *fObject);
+int fseek(FILE_t *fObject, int offset, int whence);
 /*-------------------------*/
 int ceil_div(int N, int D);
 int floor_div(int N, int D);

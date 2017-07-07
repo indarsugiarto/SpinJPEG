@@ -8,11 +8,11 @@
  */
 
 /*--- Local/private function prototypes ---*/
-static void get_SOF(uchar *fi);
-static void get_DHT(uchar *fi);
-static void get_DQT(uchar *fi);
-static void get_DRI(uchar *fi, int *ri);
-static void get_SOS(uchar *fi, int ri);
+static void get_SOF(FILE_t *fi);
+static void get_DHT(FILE_t *fi);
+static void get_DQT(FILE_t *fi);
+static void get_DRI(FILE_t *fi, int *ri);
+static void get_SOS(FILE_t *fi, int ri);
 static void get_EOI();
 
 void decode(uint arg0, uint arg1)
@@ -22,16 +22,19 @@ void decode(uint arg0, uint arg1)
 	int i,j;
 
 	// at this point, the sdramImgBuf is already created
-	uchar *fi = sdramImgBuf;
+	FILE_t *fi = sdramImgBuf;
 
 	/* First find the SOI marker: */
 	aux = get_next_MK(fi);
-	if (aux != SOI_MK) aborted_stream(ON_ELSE);
+	if (aux != SOI_MK) {
+		aborted_stream(ON_EXIT);
+		return;
+	}
 #if(DEBUG_MODE>0)
-	io_printf(IO_BUF, "[INFO] Found the SOI marker at %d!\n", nCharRead);
+	io_printf(IO_BUF, "[INFO] Found the SOI marker at %d!\n", sdramImgBuf->nCharRead-1);
 #endif
 
-	in_frame = 0;
+	in_frame = 0;	// are we in frame processing yet?
 	restart_interval = 0;
 	for (i = 0; i < 4; i++)
 	  QTvalid[i] = 0;
@@ -81,23 +84,23 @@ void decode(uint arg0, uint arg1)
 	}
 	while (1);
 
-	// TODO: decoding is finish, what now?
-	io_printf(IO_STD, "Decoding is done!\n");
 }
 
 
 /*--- Function implementation ---*/
-void get_SOF(uchar *fi)
+void get_SOF(FILE_t *fi)
 {
 	uint aux, i;
 #if(DEBUG_MODE>0)
-	io_printf(IO_BUF, "[INFO] Found the SOF marker at-%d!\n", nCharRead);
+	io_printf(IO_BUF, "[INFO] Found the SOF marker at-%d!\n", fi->nCharRead-1);
 #endif
+
 	in_frame = 1;
 	get_size(fi);	/* header size, don't care */
 	fgetc(fi);	/* precision, 8bit, don't care */
 	y_size = get_size(fi); x_size = get_size(fi); /* Video frame size ??? */
 	n_comp = fgetc(fi);	/* # of components */
+
 #if(DEBUG_MODE>0)
 	io_printf(IO_BUF, "[INFO] Image size is %d by %d\n", x_size, y_size);
 	uchar clrStr[12];
@@ -117,6 +120,7 @@ void get_SOF(uchar *fi)
 		comp[i].VS = second_quad(aux);
 		comp[i].QT = fgetc(fi);
 	}
+
 #if(DEBUG_MODE>0)
 	if (n_comp > 1)
 		io_printf(IO_BUF, "[INFO] Color format is %d:%d:%d, H=%d\n",
@@ -125,6 +129,7 @@ void get_SOF(uchar *fi)
 							comp[2].HS * comp[2].VS,
 							comp[1].HS);
 #endif
+
 	if (init_MCU() == -1)
 		aborted_stream(ON_ELSE);
 

@@ -60,7 +60,7 @@ unsigned long get_bits(uchar *fi, int number)
 }
 
 
-uint get_next_MK(uchar *fi)
+uint get_next_MK(FILE_t *fi)
 {
     unsigned int c;
     int ffmet = 0;
@@ -78,7 +78,9 @@ uint get_next_MK(uchar *fi)
             break;
         default:
             if (locpassed > 1)
+#if(DEBUG_MODE>2)
                 io_printf(IO_BUF, "[NOTE] passed %d bytes\n", locpassed);
+#endif
             if (ffmet)
                 return (0xFF00 | c);
             ffmet = 0;
@@ -91,11 +93,11 @@ uint get_next_MK(uchar *fi)
     return (unsigned int) EOF;
 }
 
-uint get_size(uchar *fi)
+uint get_size(FILE_t *fi)
 {
-    uchar aux;
+	uint aux;
 
-    aux = (uchar)fgetc(fi);
+	aux = (uint)fgetc(fi);
     return (aux << 8) | fgetc(fi);	/* big endian */
 }
 
@@ -201,27 +203,24 @@ int load_quant_tables(uchar *fi)
 }
 
 
-void skip_segment(uchar *fi)	/* skip a segment we don't want */
+void skip_segment(FILE_t *fi)	/* skip a segment we don't want */
 {
-  unsigned int size;
+  uint size;
   char	tag[5];
   int i;
 
-  size = get_size(fi);
+  size = get_size(fi);	// read two bytes from fi which signifies
+						// length of segment excluding the marker
   if (size > 5) {
     for (i = 0; i < 4; i++)
-      tag[i] = fgetc(fi);
+	  tag[i] = (char)fgetc(fi); // read four characters
     tag[4] = '\0';
 #if(DEBUG_MODE>0)
       io_printf(IO_BUF, "[INFO] Tag is %s\n", tag);
 #endif
-    size -= 4;
+	size -= 4;		    // because 4 characters have been read
   }
-  //fseek(fi, size-2, SEEK_CUR);
-  size -= 2;
-  streamPtr += size;
-  nCharRead += size;
-
+  fseek(fi, size-2, SEEK_CUR);	// because 2 bytes is used for "size" tag
 }
 
 void clear_bits(void)

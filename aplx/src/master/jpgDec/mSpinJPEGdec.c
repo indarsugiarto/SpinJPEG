@@ -60,18 +60,26 @@ uint roundUp(uint v)
 void resizeImgBuf(uint szFile, uint portSrc)
 {
     bool createNew;
-    if(sdramImgBufInitialized) {
-        if(szFile > sdramImgBufSize) {
-           sark_xfree(sv->sdram_heap, sdramImgBuf, ALLOC_LOCK);
+	// we use roundUp() to anticipate the expansion of memory requirement
+	// this is because sark doesn't have realloc()
+	uint szBuffer = roundUp(szFile);
+
+	if(sdramImgBufInitialized) {
+		if(szBuffer > sdramImgBuf->szBuffer) {
+		   // sdramImgBufSize firstly initialized when createNew
+		   sark_xfree(sv->sdram_heap, sdramImgBuf->stream, ALLOC_LOCK);
            createNew = true;
         } else {
            // nothing to change, just
            // reset the image buffer pointer to the starting position
-           sdramImgBufPtr = sdramImgBuf;
-           createNew = false;
+		   // this is the outcome of rounding up mechanism
+		   sdramImgBuf->ptrWrite = sdramImgBuf->stream;
+		   sdramImgBuf->ptrRead = sdramImgBuf->stream;
+		   sdramImgBuf->nCharRead = 0;
+		   createNew = false;
 #if(DEBUG_MODE > 0)
            io_printf(IO_STD, "No need to create a new sdram buffer\n");
-           io_printf(IO_STD, "sdramImgBufPtr is reset to 0x%x\n", sdramImgBufPtr);
+		   io_printf(IO_STD, "sdramImgBuf->ptrWrite is reset to 0x%x\n", sdramImgBuf->ptrWrite);
 #endif
         }
     } else {
@@ -96,22 +104,27 @@ void resizeImgBuf(uint szFile, uint portSrc)
            Hence, flag is set only to ALLOC_LOC: behind lock
                   tag is set to 0, to make sure it is always allocated (using AppID) 
         */
-        sdramImgBufSize = roundUp(szFile);
+
+		sdramImgBuf->szFile = szFile;
+		sdramImgBuf->szBuffer = szBuffer;
 
 #if(DEBUG_MODE > 0)
 		if(portSrc==SDP_PORT_RAW_INFO)
 			io_printf(IO_STD, "Allocating %d-bytes of sdram for image %dx%d\n",
-					  sdramImgBufSize,wImg,hImg);
+					  sdramImgBuf->szBuffer,wImg,hImg);
 		else
-			io_printf(IO_STD, "Allocating %d-bytes of sdram\n",sdramImgBufSize);
+			io_printf(IO_STD, "Allocating %d-bytes of sdram\n",sdramImgBuf->szBuffer);
 #endif
 
-        sdramImgBuf = sark_xalloc (sv->sdram_heap, szFile, 0, ALLOC_LOCK);
-        if(sdramImgBuf != NULL) {
+		sdramImgBuf->stream = sark_xalloc (sv->sdram_heap, sdramImgBuf->szBuffer, 0, ALLOC_LOCK);
+		if(sdramImgBuf->stream != NULL) {
             sdramImgBufInitialized = true;
-            sdramImgBufPtr = sdramImgBuf;
+			sdramImgBuf->ptrWrite = sdramImgBuf->stream;
+			sdramImgBuf->ptrRead = sdramImgBuf->stream;
+			sdramImgBuf->nCharRead = 0;
 #if(DEBUG_MODE > 0)
-            io_printf(IO_STD, "Sdram buffer is allocated at 0x%x with ptr 0x%x\n", sdramImgBuf, sdramImgBufPtr);
+			io_printf(IO_STD, "Sdram buffer is allocated at 0x%x with write-ptr at 0x%x\n",
+					  sdramImgBuf->stream, sdramImgBuf->ptrWrite);
 #endif
         } else {
 			io_printf(IO_STD, "[ERR] Fail to create sdramImgBuf!\n");
@@ -120,9 +133,6 @@ void resizeImgBuf(uint szFile, uint portSrc)
             sdramImgBufInitialized = false;
         }
     }
-
-    // additional function for fgetc()
-    streamPtr = sdramImgBuf;
 
 	// set decoder starting flag
 	decIsStarted = false;
@@ -135,8 +145,10 @@ void aborted_stream(cond_t condition)
     io_printf(IO_BUF, "[INFO] Total skipped bytes %d, total stuffers %d\n", passed, stuffers);
 #endif
     if(condition==ON_ELSE) {
-		io_printf(IO_BUF, "[ERROR] Abnormal end of decompression process!\n");
-		free_structures(); // 24 Juni: belum selesai
+#if(DEBUG_MODE>0)
+		io_printf(IO_STD, "[ERROR] Abnormal end of decompression process!\n");
+#endif
+		free_structures();
     } else if(condition==ON_EXIT) {
         // TODO: if called by exit(1)
     } else if(condition==ON_FINISH) {
@@ -156,6 +168,9 @@ void aborted_stream(cond_t condition)
     }
 }
 
+/* free_structure() basically only release buffer of ColorBuffer
+ * and FrameBuffer. The sdramImgBuf is not release, because it might
+ * be used again. */
 void free_structures()
 {
     // TODO: 24 Juni, jam 00:04 baru sampai sini
@@ -177,6 +192,9 @@ void free_structures()
  * */
 void emitDecodeDone()
 {
+#if(DEBUG_MODE>0)
+	io_printf(IO_STD, "Decoding is done!\n");
+#endif
 	streamResultToPC();
 }
 

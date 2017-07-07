@@ -67,6 +67,25 @@ typedef struct {
 } cd_t;
 
 
+// imitate FILE descriptor
+#define EOF -1
+
+typedef enum whence_e {
+	SEEK_SET,	// Beginning of file
+	SEEK_CUR,	// Current position of the file pointer
+	SEEK_END	// End of file
+} whence_t;
+
+typedef struct file_descriptor {
+	unsigned char *stream;		// normally should be in sdram
+	unsigned char *ptrWrite;	// point to a location to put an incoming stream
+	unsigned char *ptrRead;		// will be used in fgetc()
+	unsigned int szFile;		// the original file size
+	unsigned int szBuffer;		// the prepared buffer (using rounding up mechanism)
+	unsigned int nCharRead;
+}FILE_t;
+
+
 /******************** MULTICAST MECHANISM **********************/
 #define FRPL_NEW_RAW_IMG_ADDR_KEY       0x00000002
 #define FRPL_NEW_RAW_IMG_INFO_KEY       0x00000001
