@@ -10,21 +10,33 @@
 // private to this section
 static void getRawImgInfo(sdp_msg_t *msg);
 static void getRawImgData(sdp_msg_t *msg);
-static void getJPGImgInfo(sdp_msg_t *msg);
+inline static void getJPGImgInfo(sdp_msg_t *msg);
 static void getJPGImgData(sdp_msg_t *msg);
 
 void hSDP (uint mBox, uint port)
 {
+#if(DEBUG_MODE>3)
+	io_printf(IO_BUF, "sdp in at-%d\n", port);
+#endif
 
     sdp_msg_t *msg = (sdp_msg_t *) mBox;
 
     /*--------------------- JPEG File version -----------------------*/
 	if (port == SDP_PORT_JPEG_INFO) {
         if (msg->cmd_rc == SDP_CMD_INIT_SIZE) {
+			//io_printf(IO_STD, "Got SDP_CMD_INIT_SIZE\n");
 			getJPGImgInfo(msg);
-        }
+		}
+		/* SDP_CMD_CLOSE_IMAGE should be used when the PC receives the
+		 * resulting image/frame from this aplx
+		 * */
+		else if(msg->cmd_rc == SDP_CMD_CLOSE_IMAGE) {
+			io_printf(IO_STD, "Got close cmd\n");
+			closeImgBuf();
+		}
     }
     else if (port == SDP_PORT_JPEG_DATA) {
+		io_printf(IO_STD, "Got SDP_PORT_JPEG_DATA\n");
 		getJPGImgData(msg);
     }
 
@@ -68,8 +80,8 @@ void hUEvent(uint eventID, uint arg)
 {
     switch(eventID) {
     case UE_START_DECODER:
-		decIsStarted = true;
-        spin1_schedule_callback(decode, NULL, NULL, 1);
+		spin1_schedule_callback(decode, NULL, NULL, 1);
+		//dumpJPG(); --> result is OK!
         break;
     }
 }
@@ -93,28 +105,28 @@ static void getRawImgInfo(sdp_msg_t *msg)
 static void getRawImgData(sdp_msg_t *msg)
 {
 #if(DEBUG_MODE>0)
-		io_printf(IO_BUF, "Got %d-bytes of SDP data\n", msg->length);
+		//io_printf(IO_BUF, "Got %d-bytes of SDP data\n", msg->length);
 #endif
 		// assuming msg->length contains correct value ???
 		uint len = msg->length - sizeof(sdp_hdr_t);
 		// Note: GUI will send "header only" to signify end of image data
 		if(len > 0) {
-			uint tid = spin1_dma_transfer(DMA_RAW_IMG_BUF_WRITE, sdramImgBufPtr,
+			uint tid = spin1_dma_transfer(DMA_RAW_IMG_BUF_WRITE, sdramImgBuf->ptrWrite,
 							   (void *)&msg->cmd_rc, DMA_WRITE, len);
 
 #if(DEBUG_MODE>=0)
 			if(tid == 0) dmaAllocErrCntr++;
 #endif
 			// sdramImgBufPtr first initialized in resizeImgBuf()
-			sdramImgBufPtr += len;
+			sdramImgBuf->ptrWrite += len;
 			nReceivedChunk++;
 		}
 		// end of image data detected
 		else {
 #if(DEBUG_MODE>0)
 			io_printf(IO_STD, "[INFO] End-of-data is detected!\n");
-			io_printf(IO_STD, "[INFO] %d-chunks for %d-byte data are collected!\n",nReceivedChunk,szImgFile);
-			io_printf(IO_STD, "[INFO] dmaAllocErrCntr = %d\n", dmaAllocErrCntr);
+			//io_printf(IO_STD, "[INFO] %d-chunks for %d-byte data are collected!\n",nReceivedChunk,szImgFile);
+			//io_printf(IO_STD, "[INFO] dmaAllocErrCntr = %d\n", dmaAllocErrCntr);
 #endif
 			// TODO: notify mSpinJPEGenc to start the encoding process
 
@@ -131,7 +143,7 @@ static void getRawImgData(sdp_msg_t *msg)
 		}
 }
 
-static void getJPGImgInfo(sdp_msg_t *msg)
+void getJPGImgInfo(sdp_msg_t *msg)
 {
 	szImgFile = msg->arg1;
 	nReceivedChunk = 0;
@@ -152,7 +164,7 @@ static void getJPGImgData(sdp_msg_t *msg)
 		// sdramImgBufPtr first initialized in resizeImgBuf()
 		sdramImgBuf->ptrWrite += len;
 		nReceivedChunk++;	// for debugging
-#if(DEBUG_MODE>0)
+#if(DEBUG_MODE>3)
 		io_printf(IO_BUF, "sdramImgBuf->ptrWrite is at 0x%x\n", sdramImgBuf->ptrWrite);
 #endif
 	}
@@ -160,9 +172,11 @@ static void getJPGImgData(sdp_msg_t *msg)
 	// end of image data detected
 	else {
 		io_printf(IO_STD, "[INFO] End-of-data is detected!\n");
+		/*
 		io_printf(IO_STD, "[INFO] %d-chunks for %d-byte data are collected!\n",
 				  nReceivedChunk,sdramImgBuf->szFile);
 		io_printf(IO_STD, "[INFO] dmaAllocErrCntr = %d\n", dmaAllocErrCntr);
+		*/
 #if(DEBUG_MODE>0)
 		io_printf(IO_STD, "[INFO] Received %d chunks\n", nReceivedChunk);
 #endif

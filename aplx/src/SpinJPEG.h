@@ -80,6 +80,7 @@ typedef struct file_descriptor {
 	unsigned char *stream;		// normally should be in sdram
 	unsigned char *ptrWrite;	// point to a location to put an incoming stream
 	unsigned char *ptrRead;		// will be used in fgetc()
+	unsigned char isOpened;		// replacing sdramImgBufInitialized (0=closed/FALSE, 1=opened/TRUE)
 	unsigned int szFile;		// the original file size
 	unsigned int szBuffer;		// the prepared buffer (using rounding up mechanism)
 	unsigned int nCharRead;
@@ -101,6 +102,7 @@ typedef struct file_descriptor {
 #define SDP_PORT_RAW_INFO    4
 /*--- For both ---*/
 #define SDP_CMD_INIT_SIZE	1
+#define SDP_CMD_CLOSE_IMAGE	2
 
 #define SDP_RECV_CORE_ID	2	// this will be the master of mSpinJPEGdec
 #define DEC_MASTER_CORE		SDP_RECV_CORE_ID

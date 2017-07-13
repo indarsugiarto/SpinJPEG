@@ -11,11 +11,11 @@
 static unsigned char bit_count;	/* available bits in the window */
 static unsigned char window;
 
-unsigned long get_bits(uchar *fi, int number)
+unsigned long get_bits(FILE_t *fi, int number)
 {
   int i, newbit;
   unsigned long result = 0;
-  unsigned char aux, wwindow;
+  uchar aux, wwindow;
 
   if (!number)
     return 0;
@@ -26,7 +26,7 @@ unsigned long get_bits(uchar *fi, int number)
 
       if (wwindow == 0xFF)
         switch (aux = fgetc(fi)) {	/* skip stuffer 0 byte */
-            case EOF:
+			//case (uchar)EOF:
             case 0xFF:
 #if(DEBUG_MODE>0)
                 io_printf(IO_BUF, "[ERROR] Ran out of bit stream\n");
@@ -41,7 +41,7 @@ unsigned long get_bits(uchar *fi, int number)
             default:
 #if(DEBUG_MODE>0)
                 if (RST_MK(0xFF00 | aux))
-                    io_printf(IO_BUF, "[ERROR] Spontaneously found restart at %d!\n", nCharRead);
+					io_printf(IO_BUF, "[ERROR] Spontaneously found restart at %d!\n", fi->nCharRead);
                 io_printf(IO_BUF, "[ERROR] Lost sync in bit stream\n");
 #endif
                 aborted_stream(ON_ELSE);
@@ -67,9 +67,10 @@ uint get_next_MK(FILE_t *fi)
     int locpassed = -1;
 
     passed--;	/* as we fetch one anyway */
+	//io_printf(IO_BUF, "passed = %d\n",passed);
 
     while ((c = fgetc(fi)) != (unsigned int) EOF) {
-        switch (c) {
+		switch (c) {
         case 0xFF:
             ffmet = 1;
             break;
@@ -77,12 +78,16 @@ uint get_next_MK(FILE_t *fi)
             ffmet = 0;
             break;
         default:
-            if (locpassed > 1)
 #if(DEBUG_MODE>2)
+			if (locpassed > 1)
                 io_printf(IO_BUF, "[NOTE] passed %d bytes\n", locpassed);
 #endif
-            if (ffmet)
-                return (0xFF00 | c);
+			if (ffmet) {
+#if(DEBUG_MODE>2)
+				io_printf(IO_BUF, "get_next_MK() returning 0x%x\n", (0xFF00 | c));
+#endif
+				return (0xFF00 | c);
+			}
             ffmet = 0;
             break;
         }
@@ -163,7 +168,7 @@ int init_MCU(void)
 /* table elements are in ZZ order (same as unpack output)   */
 /*----------------------------------------------------------*/
 
-int load_quant_tables(uchar *fi)
+int load_quant_tables(FILE_t *fi)
 {
   char aux;
   unsigned int size, n, i, id, x;
@@ -233,7 +238,7 @@ void clear_bits(void)
 /* this takes care for processing all the blocks in one MCU */
 /*----------------------------------------------------------*/
 
-int process_MCU(uchar *fi)
+int process_MCU(FILE_t *fi)
 {
   int  i;
   long offset;
@@ -288,17 +293,17 @@ int process_MCU(uchar *fi)
   return 1;
 }
 
-uchar get_one_bit(uchar *fi)
+uchar get_one_bit(FILE_t *fi)
 {
   int newbit;
-  unsigned char aux, wwindow;
+  uchar aux, wwindow;
 
   if (bit_count == 0) {
     wwindow = fgetc(fi);
 
     if (wwindow == 0xFF)
       switch (aux = fgetc(fi)) {	/* skip stuffer 0 byte */
-      case EOF:
+	  //case (uchar)EOF:
       case 0xFF:
 #if(DEBUG_MODE>0)
         io_printf(IO_BUF, "[ERROR] Ran out of bit stream\n");

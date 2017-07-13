@@ -20,9 +20,15 @@
 
 
 
+/********************* for timing measurement **********************/
+// Enable timer - free running, 32-bit
+#define ENABLE_TIMER() tc[T2_CONTROL] = 0x82
 
+// To measure, set timer to 0
+#define START_TIMER() tc[T2_LOAD] = 0
 
-
+// Read timer and compute time (microseconds)
+#define READ_TIMER() ((0 - tc[T2_COUNT]) / sark.cpu_clk)
 
 
 
@@ -63,9 +69,10 @@ int passed;	/* number of bytes skipped looking for markers */
 
 /*--- Generic, SpiNN-related variables ---*/
 uint coreID;
+uint tmeas;
 
 /*--- JPG file storage ---*/
-bool sdramImgBufInitialized;
+//bool sdramImgBufInitialized; --> moved into sdramImgBuf->isOpened
 FILE_t *sdramImgBuf;
 //uchar *sdramImgBufPtr;
 //uint sdramImgBufSize;			// current size of buffer to hold undecoded JPG image in sdram
@@ -92,9 +99,11 @@ typedef enum cond_e
   ON_FINISH
 } cond_t;
 
+void dumpJPG();			// for debugging
 void decode(uint arg0, uint arg1);          // decoder main loop
 void app_init ();
 void resizeImgBuf(uint szFile, uint portSrc); // portSrc can be used to distinguish, if it is for JPEG data or Raw data
+void closeImgBuf();			// the opposite of resizeImgBuf
 void aborted_stream(cond_t condition);
 void free_structures();
 void emitDecodeDone();
@@ -112,12 +121,12 @@ void hUEvent(uint eventID, uint arg);
 uint get_next_MK(FILE_t *fi);
 uint get_size(FILE_t *fi);
 int init_MCU(void);
-int process_MCU(uchar *fi);
-int	load_quant_tables(uchar *fi);
+int process_MCU(FILE_t *fi);
+int	load_quant_tables(FILE_t *fi);
 void skip_segment(FILE_t *fi);
 void clear_bits();
-uchar get_one_bit(uchar *fi);
-unsigned long get_bits(uchar *fi, int number);
+uchar get_one_bit(FILE_t *fi);
+unsigned long get_bits(FILE_t *fi, int number);
 
 
 /*-----------------------------------------*/
@@ -138,14 +147,14 @@ void color_conversion(void);
 /* prototypes from table_vld.c or tree_vld.c */
 /*-------------------------------------------*/
 
-int	load_huff_tables(uchar *fi);
-uchar get_symbol(uchar *fi, int select);
+int	load_huff_tables(FILE_t *fi);
+uchar get_symbol(FILE_t *fi, int select);
 
 /*-----------------------------------------*/
 /* prototypes from huffman.c 		   */
 /*-----------------------------------------*/
 /* unpack, predict, dequantize, reorder on store */
-void unpack_block(uchar *fi, FBlock *T, int comp);
+void unpack_block(FILE_t *fi, FBlock *T, int comp);
 
 /*-------------------------------------------*/
 /* prototypes from idct.c                    */

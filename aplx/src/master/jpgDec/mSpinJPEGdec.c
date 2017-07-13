@@ -30,15 +30,55 @@ void c_main()
 /*--------------------------- HELPER FUNCTION -----------------------------*/
 /*-------------------------------------------------------------------------*/
 
+// initIPTag is private here:
+static void initIPTag()
+{
+	// make sure ip tag SDP_SEND_RESULT_TAG is set correctly
+	sdp_msg_t iptag;
+	iptag.flags = 0x07;	// no replay
+	iptag.tag = 0;		// internal
+	iptag.srce_addr = sv->p2p_addr;
+	iptag.srce_port = 0xE0 + coreID;	// use port-7
+	iptag.dest_addr = sv->p2p_addr;
+	iptag.dest_port = 0;				// send to "root"
+	iptag.cmd_rc = 26;
+	// set the reply tag
+	iptag.arg1 = (1 << 16) + SDP_SEND_RESULT_TAG;
+	iptag.arg2 = SDP_SEND_RESULT_PORT;
+	iptag.arg3 = SDP_HOST_IP;
+	iptag.length = sizeof(sdp_hdr_t) + sizeof(cmd_hdr_t);
+	spin1_send_sdp_msg(&iptag, 10);
+}
+
+static void initImgBuf()
+{
+	// without sdramImgBuf = sark_alloc, it creates WDOG!!!
+	sdramImgBuf = sark_alloc(1, sizeof(FILE_t));
+	sdramImgBuf->isOpened = 0;
+	/* The following might not be necessary:
+	sdramImgBuf->nCharRead = 0;
+	sdramImgBuf->stream = NULL;
+	sdramImgBuf->ptrRead = NULL;
+	sdramImgBuf->ptrWrite = NULL;
+	sdramImgBuf->szBuffer = 0;
+	sdramImgBuf->szFile = 0;
+	*/
+}
+
 void app_init ()
 {
     coreID = spin1_get_core_id ();
     if(coreID == SDP_RECV_CORE_ID) {
         spin1_callback_on (SDP_PACKET_RX, hSDP, -1);
     }
-    sdramImgBufInitialized = false;
+	if(sark_chip_id()==0)
+		initIPTag();
+	// TODO: refactor this: sdramImgBufInitialized = false;
+	// create a new image buffer
+	initImgBuf();
 	io_printf(IO_STD, "[mSpinJPEGdec] Started\n");
 }
+
 
 /* Round up to the next highest power of 2 
  * http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2 */
@@ -54,6 +94,25 @@ uint roundUp(uint v)
     return v;
 }
 
+/* so, when closeImgBuf() is called?
+ * if this app is for one image, then it can be called after decoding is finish
+ * but if it is for video, then it should be called when the last frame is processed
+ * HENCE: needs special code sent from PC via SDP
+ */
+void closeImgBuf()
+{
+	if(decIsStarted) {
+#if(DEBUG_MODE>3)
+		io_printf(IO_STD, "Decoding is in progress!\n");
+#endif
+		return;
+	}
+	if(sdramImgBuf->isOpened) {
+		sark_xfree(sv->sdram_heap, sdramImgBuf->stream, ALLOC_LOCK);
+		sdramImgBuf->isOpened = false;
+	}
+}
+
 /* resizeImgBuf() is called when host-PC trigger an SDP with SDP_CMD_INIT_SIZE
  *
  */
@@ -64,7 +123,7 @@ void resizeImgBuf(uint szFile, uint portSrc)
 	// this is because sark doesn't have realloc()
 	uint szBuffer = roundUp(szFile);
 
-	if(sdramImgBufInitialized) {
+	if(sdramImgBuf->isOpened == 1) {
 		if(szBuffer > sdramImgBuf->szBuffer) {
 		   // sdramImgBufSize firstly initialized when createNew
 		   sark_xfree(sv->sdram_heap, sdramImgBuf->stream, ALLOC_LOCK);
@@ -77,7 +136,7 @@ void resizeImgBuf(uint szFile, uint portSrc)
 		   sdramImgBuf->ptrRead = sdramImgBuf->stream;
 		   sdramImgBuf->nCharRead = 0;
 		   createNew = false;
-#if(DEBUG_MODE > 0)
+#if(DEBUG_MODE > 3)
            io_printf(IO_STD, "No need to create a new sdram buffer\n");
 		   io_printf(IO_STD, "sdramImgBuf->ptrWrite is reset to 0x%x\n", sdramImgBuf->ptrWrite);
 #endif
@@ -108,7 +167,7 @@ void resizeImgBuf(uint szFile, uint portSrc)
 		sdramImgBuf->szFile = szFile;
 		sdramImgBuf->szBuffer = szBuffer;
 
-#if(DEBUG_MODE > 0)
+#if(DEBUG_MODE > 3)
 		if(portSrc==SDP_PORT_RAW_INFO)
 			io_printf(IO_STD, "Allocating %d-bytes of sdram for image %dx%d\n",
 					  sdramImgBuf->szBuffer,wImg,hImg);
@@ -118,11 +177,11 @@ void resizeImgBuf(uint szFile, uint portSrc)
 
 		sdramImgBuf->stream = sark_xalloc (sv->sdram_heap, sdramImgBuf->szBuffer, 0, ALLOC_LOCK);
 		if(sdramImgBuf->stream != NULL) {
-            sdramImgBufInitialized = true;
 			sdramImgBuf->ptrWrite = sdramImgBuf->stream;
 			sdramImgBuf->ptrRead = sdramImgBuf->stream;
 			sdramImgBuf->nCharRead = 0;
-#if(DEBUG_MODE > 0)
+			sdramImgBuf->isOpened = 1;
+#if(DEBUG_MODE > 3)
 			io_printf(IO_STD, "Sdram buffer is allocated at 0x%x with write-ptr at 0x%x\n",
 					  sdramImgBuf->stream, sdramImgBuf->ptrWrite);
 #endif
@@ -130,7 +189,6 @@ void resizeImgBuf(uint szFile, uint portSrc)
 			io_printf(IO_STD, "[ERR] Fail to create sdramImgBuf!\n");
             // dangerous: terminate then!
             rt_error (RTE_MALLOC);
-            sdramImgBufInitialized = false;
         }
     }
 
@@ -141,9 +199,6 @@ void resizeImgBuf(uint szFile, uint portSrc)
 /* If fails to decode the JPEG file in sdram buffer, abort the operation gracefully */
 void aborted_stream(cond_t condition)
 {
-#if(DEBUG_MODE>0)
-    io_printf(IO_BUF, "[INFO] Total skipped bytes %d, total stuffers %d\n", passed, stuffers);
-#endif
     if(condition==ON_ELSE) {
 #if(DEBUG_MODE>0)
 		io_printf(IO_STD, "[ERROR] Abnormal end of decompression process!\n");
@@ -151,6 +206,7 @@ void aborted_stream(cond_t condition)
 		free_structures();
     } else if(condition==ON_EXIT) {
         // TODO: if called by exit(1)
+		free_structures();
     } else if(condition==ON_FINISH) {
 		emitDecodeDone();
 		free_structures();
@@ -166,6 +222,7 @@ void aborted_stream(cond_t condition)
         exit(0);
         */
     }
+	decIsStarted = false;
 }
 
 /* free_structure() basically only release buffer of ColorBuffer
@@ -174,16 +231,14 @@ void aborted_stream(cond_t condition)
 void free_structures()
 {
     // TODO: 24 Juni, jam 00:04 baru sampai sini
-    /*
     int i;
 
-    for (i=0; i<4; i++) if (QTvalid[i]) free(QTable[i]);
+	for (i=0; i<4; i++) if (QTvalid[i]) sark_free(QTable[i]);
 
-    free(ColorBuffer);
-    free(FrameBuffer);
+	sark_xfree(sv->sdram_heap, ColorBuffer, ALLOC_LOCK);
+	sark_xfree(sv->sdram_heap, FrameBuffer, ALLOC_LOCK);
 
-    for (i=0; MCU_valid[i] != -1; i++) free(MCU_buff[i]);
-    */
+	for (i=0; MCU_valid[i] != -1; i++) sark_free(MCU_buff[i]);
 }
 
 /* Ideas for emitDecodeDone:
@@ -198,39 +253,17 @@ void emitDecodeDone()
 	streamResultToPC();
 }
 
-// initIPTag is private here:
-static void initIPTag()
-{
-	// make sure ip tag SDP_SEND_RESULT_TAG is set correctly
-	sdp_msg_t iptag;
-	iptag.flags = 0x07;	// no replay
-	iptag.tag = 0;		// internal
-	iptag.srce_addr = sv->p2p_addr;
-	iptag.srce_port = 0xE0 + coreID;	// use port-7
-	iptag.dest_addr = sv->p2p_addr;
-	iptag.dest_port = 0;				// send to "root"
-	iptag.cmd_rc = 26;
-	// set the reply tag
-	iptag.arg1 = (1 << 16) + SDP_SEND_RESULT_TAG;
-	iptag.arg2 = SDP_SEND_RESULT_PORT;
-	iptag.arg3 = SDP_HOST_IP;
-	iptag.length = sizeof(sdp_hdr_t) + sizeof(cmd_hdr_t);
-	spin1_send_sdp_msg(&iptag, 10);
-}
-
-
 void streamResultToPC()
 {
-	int i, w;
+	int w;
 	w = 2 * ceil_div(x_size, 2); /* round to 2 more */
 	/*
 	for (i=0; i<y_size; i++)
 		fwrite(FrameBuffer+n_comp*i*x_size, n_comp, w, fo);
 	*/
-
-	// make sure iptag is set
-	initIPTag();
-
+#if(DEBUG_MODE>0)
+	io_printf(IO_STD, "Streaming back to PC...");
+#endif
 	// prepare sdp
 	sdp_msg_t result;
 	result.tag = SDP_SEND_RESULT_TAG;
@@ -241,7 +274,8 @@ void streamResultToPC()
 	result.dest_port = PORT_ETH;
 
 	// iterate until all data has been sent
-	int total = y_size * w;
+	//int total = y_size * w ;
+	int total = y_size * w * 3; // Remember: RGB image!
 	int rem = total;
 	int sz = 272;
 	uchar *ptr = FrameBuffer;
@@ -257,4 +291,7 @@ void streamResultToPC()
 	// finally, send EOF
 	result.length = sizeof(sdp_hdr_t);
 	spin1_send_sdp_msg(&result, 10);
+#if(DEBUG_MODE>0)
+	io_printf(IO_STD, "done!\n");
+#endif
 }

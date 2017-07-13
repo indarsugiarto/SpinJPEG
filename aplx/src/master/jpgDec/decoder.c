@@ -13,7 +13,32 @@ static void get_DHT(FILE_t *fi);
 static void get_DQT(FILE_t *fi);
 static void get_DRI(FILE_t *fi, int *ri);
 static void get_SOS(FILE_t *fi, int ri);
-static void get_EOI();
+static void get_EOI(FILE_t *fi);
+
+void dumpJPG()
+{
+	io_printf(IO_STD, "Dumping JPG content...\n");
+	int c,r=0;
+	while ((c = fgetc(sdramImgBuf)) != EOF) {
+		if(r>=16) {
+			r = 0;
+			io_printf(IO_STD, "\n%02x ", c);
+			r++;
+		} else {
+			io_printf(IO_STD, "%02x ", c);
+			r++;
+		}
+	}
+	io_printf(IO_STD, "\n");
+	fseek(sdramImgBuf, 0, SEEK_SET);
+}
+
+// dumpRawResult will dump the content of FrameBuffer
+static void dumpRawResult()
+{
+	uchar *ptr = FrameBuffer;
+
+}
 
 void decode(uint arg0, uint arg1)
 {
@@ -21,17 +46,28 @@ void decode(uint arg0, uint arg1)
 	int restart_interval; /* RST check */
 	int i,j;
 
+	decIsStarted = true;
+#if(DEBUG_MODE>0)
+	io_printf(IO_STD, "[INFO] Start decoding!\n");
+#endif
+
 	// at this point, the sdramImgBuf is already created
-	FILE_t *fi = sdramImgBuf;
+	// FILE_t *fi = sdramImgBuf; --> this creates a duplicate that makes get_next_MK() incorrect
 
 	/* First find the SOI marker: */
-	aux = get_next_MK(fi);
+	//aux = get_next_MK(fi);
+	aux = get_next_MK(sdramImgBuf);
+	//io_printf(IO_STD, "aux = 0x%x\n", aux);
+
 	if (aux != SOI_MK) {
+#if(DEBUG_MODE>0)
+		io_printf(IO_BUF, "[ERROR] cannot detect SOI\n");
+#endif
 		aborted_stream(ON_EXIT);
 		return;
 	}
 #if(DEBUG_MODE>0)
-	io_printf(IO_BUF, "[INFO] Found the SOI marker at %d!\n", sdramImgBuf->nCharRead-1);
+	io_printf(IO_BUF, "[INFO] Found the SOI marker at %d!\n", sdramImgBuf->nCharRead);
 #endif
 
 	in_frame = 0;	// are we in frame processing yet?
@@ -39,27 +75,30 @@ void decode(uint arg0, uint arg1)
 	for (i = 0; i < 4; i++)
 	  QTvalid[i] = 0;
 
+	ENABLE_TIMER ();	// Enable timer (once)
+	START_TIMER ();	// Start measuring
+
 	/* Now process segments as they appear: */
 	do {
-		mark = get_next_MK(fi);
+		mark = get_next_MK(sdramImgBuf);
 		switch (mark) {
 		case SOF_MK: /* start of frame marker */
-			get_SOF(fi); break;
+			get_SOF(sdramImgBuf); break;
 		case DHT_MK: /* Define Huffman Table */
-			get_DHT(fi); break;
+			get_DHT(sdramImgBuf); break;
 		case DQT_MK: /* Define Quantization Table */
-			get_DQT(fi); break;
+			get_DQT(sdramImgBuf); break;
 		case DRI_MK: /* Define Restart Interval */
-			get_DRI(fi, &restart_interval); break;
+			get_DRI(sdramImgBuf, &restart_interval); break;
 		case SOS_MK:
-			get_SOS(fi, restart_interval); break;
+			get_SOS(sdramImgBuf, restart_interval); break;
 		case EOI_MK:
-			get_EOI(); break;
+			get_EOI(sdramImgBuf); break;
 		case COM_MK:
 #if(DEBUG_MODE>0)
 			io_printf(IO_BUF, "[INFO] Skipping comments\n");
 #endif
-			skip_segment(fi); break;
+			skip_segment(sdramImgBuf); break;
 		case EOF:
 #if(DEBUG_MODE>0)
 			io_printf(IO_BUF, "[ERROR] Ran out of input data!\n");
@@ -70,7 +109,7 @@ void decode(uint arg0, uint arg1)
 #if(DEBUG_MODE>0)
 				io_printf(IO_BUF, "[INFO] Skipping application data\n");
 #endif
-				skip_segment(fi); break;
+				skip_segment(sdramImgBuf); break;
 			}
 			if (RST_MK(mark)) {
 				reset_prediction(); break;
@@ -82,8 +121,11 @@ void decode(uint arg0, uint arg1)
 			aborted_stream(ON_ELSE); break;
 		}
 	}
-	while (1);
-
+	while (decIsStarted);
+	tmeas = READ_TIMER (); // Get elapsed time
+#if(DEBUG_MODE>0)
+	io_printf(IO_STD, "Finish decoding in %u us\n", tmeas);
+#endif
 }
 
 
@@ -130,9 +172,12 @@ void get_SOF(FILE_t *fi)
 							comp[1].HS);
 #endif
 
-	if (init_MCU() == -1)
+	if (init_MCU() == -1) {
+#if(DEBUG_MODE>0)
+		io_printf(IO_BUF, "[ERROR] Cannot init MCUs\n");
+#endif
 		aborted_stream(ON_ELSE);
-
+	}
 	/* dimension scan buffer for YUV->RGB conversion */
 	uint sz;
 	sz = x_size * y_size * n_comp;
@@ -151,25 +196,33 @@ void get_SOF(FILE_t *fi)
 	}
 }
 
-void get_DHT(uchar *fi)
+void get_DHT(FILE_t *fi)
 {
 #if(DEBUG_MODE>0)
-	io_printf(IO_BUF, "[INFO] Defining Huffman Tables found at-%d\n", nCharRead);
+	io_printf(IO_BUF, "[INFO] Defining Huffman Tables found at-%d\n", fi->nCharRead);
 #endif
-	if (load_huff_tables(fi) == -1)
+	if (load_huff_tables(fi) == -1) {
+#if(DEBUG_MODE>0)
+		io_printf(IO_BUF, "[ERROR] Cannot load Huffman Table\n");
+#endif
 		aborted_stream(ON_ELSE);
+	}
 }
 
-void get_DQT(uchar *fi)
+void get_DQT(FILE_t *fi)
 {
 #if(DEBUG_MODE>0)
-	io_printf(IO_BUF, "[INFO] Defining Quantization Tables at-%d\n", nCharRead);
+	io_printf(IO_BUF, "[INFO] Defining Quantization Tables at-%d\n", fi->nCharRead);
 #endif
-	if (load_quant_tables(fi) == -1)
+	if (load_quant_tables(fi) == -1) {
+#if(DEBUG_MODE>0)
+		io_printf(IO_BUF, "[ERROR] Cannot load Quantization Table\n");
+#endif
 		aborted_stream(ON_ELSE);
+	}
 }
 
-void get_DRI(uchar *fi, int *ri)
+void get_DRI(FILE_t *fi, int *ri)
 {
 	get_size(fi);	/* skip size */
 	*ri = get_size(fi);
@@ -178,14 +231,14 @@ void get_DRI(uchar *fi, int *ri)
 #endif
 }
 
-void get_SOS(uchar *fi, int restart_interval)
+void get_SOS(FILE_t *fi, int restart_interval)
 {
 	uint aux;
 	int n_restarts, leftover; /* RST check */
 	int i,j;
 
 #if(DEBUG_MODE>0)
-	io_printf(IO_BUF, "[INFO] Found the SOS marker at-%d!\n", nCharRead);
+	io_printf(IO_BUF, "[INFO] Found the SOS marker at-%d!\n", fi->nCharRead);
 #endif
 	get_size(fi); /* don't care */
 	aux = fgetc(fi);
@@ -233,7 +286,7 @@ void get_SOS(uchar *fi, int restart_interval)
 				aborted_stream(ON_ELSE);
 			}
 #if(DEBUG_MODE>0)
-			else io_printf(IO_BUF, "[INFO] Found Restart Marker at-%d\n", nCharRead);
+			else io_printf(IO_BUF, "[INFO] Found Restart Marker at-%d\n", fi->nCharRead);
 #endif
 
 			reset_prediction();
@@ -250,16 +303,20 @@ void get_SOS(uchar *fi, int restart_interval)
 	in_frame = 0;
 }
 
-void get_EOI()
+void get_EOI(FILE_t *fi)
 {
 #if(DEBUG_MODE>0)
-	io_printf(IO_BUF, "[INFO] Found the EOI marker at-%d!\n", nCharRead);
+	io_printf(IO_BUF, "[INFO] Found the EOI marker at-%d!\n", fi->nCharRead);
 #endif
 	if (in_frame) aborted_stream(ON_ELSE);
 
 #if(DEBUG_MODE>0)
 	io_printf(IO_BUF, "[INFO] Total skipped bytes %d, total stuffers %d\n", passed, stuffers);
 #endif
+
+	// Indar: test if the result is correct
+	dumpRawResult();
+
 	aborted_stream(ON_FINISH);
 }
 

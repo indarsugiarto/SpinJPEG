@@ -12,6 +12,9 @@ int fgetc(FILE_t *fObject)
 		sark_mem_cpy((void *)&c, (void *)fObject->ptrRead, 1);
 		fObject->ptrRead++;    // advance one character
 		fObject->nCharRead++;
+#if(DEBUG_MODE>2)
+		io_printf(IO_BUF, "in fgetc() char-c = 0x%x\n", c);
+#endif
         return (int)c;
     }
     else {
@@ -21,10 +24,16 @@ int fgetc(FILE_t *fObject)
 
 int fseek(FILE_t *fObject, int offset, int whence)
 {
-	// here we don't need to implement all whence type, just SEEK_CUR
+	// here we don't need to implement all whence type
+	// and we deal only with ptrRead, not ptrWrite
 	if(whence == SEEK_CUR) {
 		fObject->nCharRead += offset;
 		fObject->ptrRead += offset;
+	}
+	else if(whence == SEEK_SET) {
+		fObject->ptrRead = fObject->stream;
+		fObject->ptrRead += offset;
+		fObject->nCharRead = offset;
 	}
 }
 

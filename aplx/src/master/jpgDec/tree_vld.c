@@ -50,7 +50,7 @@ static unsigned int    *HTable[4] = {
 /* Loading of Huffman table, with leaves drop ability	    */
 /*----------------------------------------------------------*/
 
-int load_huff_tables(uchar *fi)
+int load_huff_tables(FILE_t *fi)
 {
   char aux;
   int size, hclass, id;
@@ -186,7 +186,7 @@ int load_huff_tables(uchar *fi)
 /* using specified huffman table ... */
 /*-----------------------------------*/
 
-uchar get_symbol(uchar *fi, int select)
+uchar get_symbol(FILE_t *fi, int select)
 {
   int cellPt;
 
@@ -198,7 +198,7 @@ uchar get_symbol(uchar *fi, int select)
   switch (HUFF_FLAG(HTable[select][cellPt])) {
   case SPECIAL_FLAG:
 #if(DEBUG_MODE>0)
-    io_printf(IO_BUF, "[ERROR] Found forbidden Huffman symbol at-%d!\n", nCharRead);
+	io_printf(IO_BUF, "[ERROR] Found forbidden Huffman symbol at-%d!\n", fi->nCharRead);
 #endif
     aborted_stream(ON_ELSE);
     break;
